@@ -55,6 +55,49 @@ yarn start --sources 'packages/esm-patient-biometrics-app' --sources 'packages/e
 
 Alternatively, you could run `yarn serve` from within the individual packages and then use [import map overrides](http://o3-dev.docs.openmrs.org/#/getting_started/setup?id=import-map-overrides).
 
+## Steps to keep the forked repository in sync with the upstream repository.
+
+1.Ensure the Upstream new-visits-widget branch is in Sync with the main Branch: 
+
+First, ensure that the `new-visits-widget` branch in the upstream [repository](openmrs/openmrs-esm-patient-chart) is up-to-date with the latest changes from the `main` branch. The openmrs/openmrs-esm-patient-chart:new-visits-widget currently has an open PR, check on the [link](https://github.com/openmrs/openmrs-esm-patient-chart/pull/1658)
+
+Ensure you are on the new-visits-widget branch locally and run the following commands:
+```js
+
+git pull --rebase origin main
+git rebase --continue
+git push --force  origin new-visits-widget
+```
+2. Update Forked [Repository](https://github.com/UCSF-IGHS/openmrs-esm-patient-chart/tree/new-visits-widget): 
+
+After synchronizing with the upstream main, update the forked [repository](https://github.com/UCSF-IGHS/openmrs-esm-patient-chart) to ensure the `UCSF-IGHS/openmrs-esm-patient-chart:new-visits-widget`  is up-to-date with the upstream `openmrs/openmrs-esm-patient-chart:new-visits-widget`. Note that the commits in the new-visits-widget branches of both repositories may differ.
+
+You may need to pull the latest changes from the upstream new-visits-widget branch and merge or rebase them into your forked branch.
+
+3. Local Testing:
+
+Test the updated `new-visits-widget` branch locally to ensure that no breaking changes have been introduced. Verify that everything works correctly before proceeding.
+
+To start a dev server for a specific module, run:
+
+```bash
+yarn start --sources 'packages/esm-<insert-package-name>-app'
+```
+for example pointing to the dev backend 
+```bash
+yarn start --sources packages/esm-patient-chart-app --backend https://openmrs-dev.globalhealthapp.net
+```
+
+Once all tests are successful and everything is confirmed to be working correctly, git push your local changes.
+
+4. Publish New Version:
+
+Lastly publish a new NPM version tagged as `next`. 
+```
+npm run build --prod
+npm publish --access public --tag next
+```
+
 ## Running tests
 
 To run tests for all packages, run:
