@@ -15,6 +15,10 @@
   align-items: baseline;
   min-width: 50%;
 
+  :global(.cds--inline-loading) {
+    min-height: layout.$spacing-05 !important;
+  }
+
   :global(.cds--inline-loading__text) {
     @include type.type-style('body-01');
   }
@@ -40,14 +44,16 @@
   height: 100%;
 }
 
-.errorMessage {
-  @include type.type-style('label-02');
-  margin-top: layout.$spacing-03;
-  color: $danger;
-}
-
 .notification {
   margin: 0;
   min-width: 100%;
   padding: 0;
+}
+
+.programName {
+  @include type.type-style('body-compact-02');
+}
+
+.locationLabel {
+  margin-bottom: layout.$spacing-05;
 }

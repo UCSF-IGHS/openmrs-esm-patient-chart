@@ -12,6 +12,7 @@
   "enterSecondaryDiagnoses": "أدخل التشخيص الثانوي",
   "error": "Error",
   "errorFetchingConcepts": "There was a problem fetching concepts",
+  "errorTransformingDiagnoses": "Error transforming diagnoses",
   "image": "صورة",
   "imageRemoved": "Image removed",
   "imageUploadHelperText": "قم بتحميل صورة أو استخدم كاميرا هذا الجهاز لالتقاط صورة",
@@ -34,5 +35,5 @@
   "visitNotes": "ملاحظات الزيارة",
   "visitNoteSaved": "تم حفظ ملاحظة الزيارة",
   "visitNoteSaveError": "خطأ في حفظ ملاحظة الزيارة",
-  "visitNoteWorkspaceTitle": "Visit Note"
+  "visitNoteWorkspaceTitle": "ملاحظة الزيارة"
 }

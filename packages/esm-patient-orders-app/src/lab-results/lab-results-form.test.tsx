@@ -8,14 +8,17 @@ import {
   type LabOrderConcept,
   updateOrderResult,
   type Datatype,
+  useCompletedLabResults,
 } from './lab-results.resource';
 import LabResultsForm from './lab-results-form.component';
 import { type Order } from '@openmrs/esm-patient-common-lib';
 import { type Encounter } from '../types/encounter';
+import { mockPatient } from 'tools';
 
 const mockUseOrderConceptByUuid = jest.mocked(useOrderConceptByUuid);
 const mockUseLabEncounter = jest.mocked(useLabEncounter);
 const mockUseObservation = jest.mocked(useObservation);
+const mockUseCompletedLabResults = jest.mocked(useCompletedLabResults);
 
 jest.mock('./lab-results.resource', () => ({
   ...jest.requireActual('./lab-results.resource'),
@@ -23,6 +26,7 @@ jest.mock('./lab-results.resource', () => ({
   useLabEncounter: jest.fn(),
   useObservation: jest.fn(),
   updateOrderResult: jest.fn().mockResolvedValue({}),
+  useCompletedLabResults: jest.fn(),
 }));
 
 const mockOrder = {
@@ -41,7 +45,8 @@ const testProps = {
   order: mockOrder as Order,
   promptBeforeClosing: jest.fn(),
   setTitle: jest.fn(),
-  patientUuid: 'patient-uuid',
+  patientUuid: mockPatient.id,
+  patient: mockPatient,
 };
 
 describe('LabResultsForm', () => {
@@ -78,6 +83,12 @@ describe('LabResultsForm', () => {
       isLoading: false,
       error: null,
       isValidating: false,
+      mutate: jest.fn(),
+    });
+    mockUseCompletedLabResults.mockReturnValue({
+      completeLabResult: null,
+      isLoading: false,
+      error: null,
       mutate: jest.fn(),
     });
   });
@@ -122,7 +133,9 @@ describe('LabResultsForm', () => {
     });
     render(<LabResultsForm {...testProps} />);
 
-    const input = await screen.findByLabelText(`Test Concept (0 - 100 mg/dL)`);
+    const input = screen.getByRole('spinbutton', {
+      name: /Test Concept/i,
+    });
     await user.type(input, '50.5');
 
     const saveButton = screen.getByRole('button', { name: /Save and close/i });
@@ -168,7 +181,7 @@ describe('LabResultsForm', () => {
     const user = userEvent.setup();
     render(<LabResultsForm {...testProps} />);
 
-    const input = await screen.findByLabelText(`Test Concept (0 - 100 mg/dL)`);
+    const input = await screen.findByLabelText('Test Concept (0 - 100 mg/dL)');
     await user.type(input, '0');
 
     await waitFor(() => {
@@ -199,7 +212,9 @@ describe('LabResultsForm', () => {
     });
     render(<LabResultsForm {...testProps} />);
 
-    const input = await screen.findByLabelText(`Test Concept (0 - 100 mg/dL)`);
+    const input = screen.getByRole('spinbutton', {
+      name: /Test Concept/i,
+    });
     await user.type(input, '150');
 
     const saveButton = screen.getByRole('button', { name: /Save and close/i });
@@ -233,7 +248,9 @@ describe('LabResultsForm', () => {
     });
     render(<LabResultsForm {...testProps} />);
 
-    const input = await screen.findByLabelText(`Test Concept (0 - -- mg/dL)`);
+    const input = screen.getByRole('spinbutton', {
+      name: /Test Concept/i,
+    });
     await user.type(input, '-50');
 
     const saveButton = screen.getByRole('button', { name: /Save and close/i });
@@ -608,5 +625,138 @@ describe('LabResultsForm', () => {
       },
       expect.anything(),
     );
+  });
+
+  test('display error notification when the concept datatype is N/A', async () => {
+    mockUseOrderConceptByUuid.mockReturnValue({
+      concept: {
+        uuid: 'concept-uuid',
+        display: 'Test Concept',
+        setMembers: [],
+        datatype: { display: 'N/A' },
+      } as LabOrderConcept,
+      isLoading: false,
+      error: null,
+      isValidating: false,
+      mutate: jest.fn(),
+    });
+    render(<LabResultsForm {...testProps} />);
+
+    const label = screen.getByText('Test Concept');
+    expect(label).toBeInTheDocument();
+
+    const errorNotification = screen.getByText(
+      'This test needs to be configured with a specific type (like number, text, or choice list) to record results properly. Please contact your system administrator to fix this.',
+    );
+    expect(errorNotification).toBeInTheDocument();
+  });
+
+  test('should display second level of set members for a given concept, if present', () => {
+    const user = userEvent.setup();
+    mockUseOrderConceptByUuid.mockReturnValue({
+      concept: {
+        uuid: 'concept-uuid',
+        display: 'Test Concept',
+        set: true,
+        setMembers: [
+          {
+            uuid: 'set-member-uuid-1',
+            display: 'Set Member 1',
+            concept: { uuid: 'concept-uuid-1', display: 'Concept 1' },
+            datatype: { display: 'Numeric', hl7Abbreviation: 'NM' },
+            hiAbsolute: 100,
+            lowAbsolute: 0,
+            lowCritical: null,
+            lowNormal: null,
+            hiCritical: null,
+            hiNormal: null,
+            units: 'mg/dL',
+          },
+          {
+            uuid: 'set-member-uuid-2',
+            display: 'Set Member 2',
+            concept: { uuid: 'concept-uuid-2', display: 'Concept 2' },
+            datatype: { display: 'Numeric', hl7Abbreviation: 'NM' },
+            hiAbsolute: 80,
+            lowAbsolute: 0,
+            lowCritical: null,
+            lowNormal: null,
+            hiCritical: null,
+            hiNormal: null,
+            units: 'mmol/L',
+          },
+          {
+            uuid: 'set-member-uuid-3',
+            display: 'Set Member 3',
+            concept: { uuid: 'concept-uuid-3', display: 'Concept 3' },
+            datatype: { display: 'N/A', hl7Abbreviation: 'ZZ' },
+            set: true,
+            setMembers: [
+              {
+                uuid: 'set-member-uuid-3.1',
+                display: 'Set Member 3.1',
+                concept: { uuid: 'concept-uuid-3.1', display: 'Concept 3.1' },
+                datatype: { display: 'Numeric', hl7Abbreviation: 'NM' },
+                hiAbsolute: 80,
+                lowAbsolute: 0,
+                lowCritical: null,
+                lowNormal: null,
+                units: 'mg/dL',
+              },
+              {
+                uuid: 'set-member-uuid-3.2',
+                display: 'Set Member 3.2',
+                concept: { uuid: 'concept-uuid-3.2', display: 'Concept 3.2' },
+                datatype: { display: 'Numeric', hl7Abbreviation: 'NM' },
+                hiAbsolute: 80,
+                lowAbsolute: 0,
+                lowCritical: null,
+                units: 'mg/dL',
+              },
+            ],
+          },
+        ],
+        datatype: { display: 'Numeric' },
+        hiAbsolute: 100,
+        lowAbsolute: 0,
+        lowCritical: null,
+        lowNormal: null,
+        hiCritical: null,
+        hiNormal: null,
+        units: 'mg/dL',
+      } as unknown as LabOrderConcept,
+      isLoading: false,
+      error: null,
+      isValidating: false,
+      mutate: jest.fn(),
+    });
+
+    render(<LabResultsForm {...testProps} />);
+
+    expect(screen.getByText('Set Member 3')).toBeInTheDocument();
+    expect(screen.getByLabelText('Set Member 3.1 (0 - 80 mg/dL)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Set Member 3.2 (0 - 80 mg/dL)')).toBeInTheDocument();
+  });
+
+  test('should handle empty form submission', async () => {
+    const user = userEvent.setup();
+    render(<LabResultsForm {...testProps} />);
+
+    const saveButton = screen.getByRole('button', { name: /Save and close/i });
+    await user.click(saveButton);
+
+    expect(screen.getByText('Please fill at least one field.')).toBeInTheDocument();
+    expect(updateOrderResult).not.toHaveBeenCalled();
+  });
+
+  test('should disable save button when form has validation errors', async () => {
+    const user = userEvent.setup();
+    render(<LabResultsForm {...testProps} />);
+
+    const input = await screen.findByLabelText(`Test Concept (0 - 100 mg/dL)`);
+    await user.type(input, '150');
+
+    const saveButton = screen.getByRole('button', { name: /Save and close/i });
+    expect(saveButton).toBeDisabled();
   });
 });

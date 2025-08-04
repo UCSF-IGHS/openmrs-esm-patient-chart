@@ -1,5 +1,5 @@
 import React from 'react';
-import capitalize from 'lodash-es/capitalize';
+import { capitalize } from 'lodash-es';
 import { Toggletip, ToggletipButton, ToggletipContent } from '@carbon/react';
 import { formatDate, UserIcon } from '@openmrs/esm-framework';
 import { useTranslation } from 'react-i18next';
@@ -52,10 +52,11 @@ const MedicationRecord: React.FC<MedicationRecordProps> = ({ medication }) => {
               {medication.orderReasonNonCoded}
             </span>
           ) : null}
+          {medication.orderReasonNonCoded && medication.quantity && <>&mdash;</>}
           {medication.quantity ? (
             <span>
-              <span className={styles.label01}> &mdash; {t('quantity', 'Quantity').toUpperCase()}</span>{' '}
-              {medication.quantity} {medication?.quantityUnits?.display}
+              <span className={styles.label01}> {t('quantity', 'Quantity').toUpperCase()}</span> {medication.quantity}{' '}
+              {medication?.quantityUnits?.display}
             </span>
           ) : null}
           {medication.dateStopped ? (

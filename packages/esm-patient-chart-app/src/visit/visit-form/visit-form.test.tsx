@@ -1,25 +1,33 @@
-import React from 'react';
-import dayjs from 'dayjs';
-import { render, screen } from '@testing-library/react';
-import { esmPatientChartSchema, type ChartConfig } from '../../config-schema';
-import userEvent from '@testing-library/user-event';
 import {
+  type FetchResponse,
   getDefaultsFromConfigSchema,
-  openmrsFetch,
-  restBaseUrl,
   saveVisit,
   showSnackbar,
   updateVisit,
   useConfig,
-  usePatient,
+  useEmrConfiguration,
+  useLocations,
+  useVisitContextStore,
   useVisitTypes,
-  type FetchResponse,
   type Visit,
 } from '@openmrs/esm-framework';
+import { fireEvent, render, renderHook, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { mockLocations, mockPastVisitWithEncounters, mockVisitTypes, mockVisitWithAttributes } from '__mocks__';
+import dayjs from 'dayjs';
+import React from 'react';
 import { mockPatient } from 'tools';
-import { mockLocations, mockVisitTypes, mockVisitWithAttributes } from '__mocks__';
+import { type ChartConfig, esmPatientChartSchema } from '../../config-schema';
 import { useVisitAttributeType } from '../hooks/useVisitAttributeType';
-import StartVisitForm from './visit-form.component';
+import {
+  convertToDateTimeFields,
+  createVisitAttribute,
+  deleteVisitAttribute,
+  updateVisitAttribute,
+  useVisitFormCallbacks,
+  useVisitFormSchemaAndDefaultValues,
+} from './visit-form.resource';
+import VisitForm from './visit-form.workspace';
 
 const visitUuid = 'test_visit_uuid';
 const visitAttributes = {
@@ -50,21 +58,32 @@ const mockPromptBeforeClosing = jest.fn();
 const mockSetTitle = jest.fn();
 
 const testProps = {
+  openedFrom: 'test',
   patientUuid: mockPatient.id,
+  patient: mockPatient,
   closeWorkspace: mockCloseWorkspace,
   closeWorkspaceWithSavedChanges: mockCloseWorkspace,
   promptBeforeClosing: mockPromptBeforeClosing,
-  showVisitEndDateTimeFields: false,
   setTitle: mockSetTitle,
 };
 
 const mockSaveVisit = jest.mocked(saveVisit);
 const mockUpdateVisit = jest.mocked(updateVisit);
-const mockOpenmrsFetch = jest.mocked(openmrsFetch);
 const mockUseConfig = jest.mocked(useConfig<ChartConfig>);
 const mockUseVisitAttributeType = jest.mocked(useVisitAttributeType);
 const mockUseVisitTypes = jest.mocked(useVisitTypes);
-const mockUsePatient = jest.mocked(usePatient);
+const mockUseLocations = jest.mocked(useLocations);
+const mockUseEmrConfiguration = jest.mocked(useEmrConfiguration);
+
+// from ./visit-form.resource
+const mockOnVisitCreatedOrUpdatedCallback = jest.fn();
+jest.mocked(useVisitFormCallbacks).mockReturnValue([
+  new Map([['test-extension-id', { onVisitCreatedOrUpdated: mockOnVisitCreatedOrUpdatedCallback }]]), // visitFormCallbacks
+  jest.fn(), // setVisitFormCallbacks
+]);
+const mockCreateVisitAttribute = jest.mocked(createVisitAttribute).mockResolvedValue({} as unknown as FetchResponse);
+const mockUpdateVisitAttribute = jest.mocked(updateVisitAttribute).mockResolvedValue({} as unknown as FetchResponse);
+const mockDeleteVisitAttribute = jest.mocked(deleteVisitAttribute).mockResolvedValue({} as unknown as FetchResponse);
 
 jest.mock('@openmrs/esm-patient-common-lib', () => ({
   ...jest.requireActual('@openmrs/esm-patient-common-lib'),
@@ -94,7 +113,7 @@ jest.mock('../hooks/useVisitAttributeType', () => ({
   useVisitAttributeTypes: jest.fn(() => ({
     isLoading: false,
     error: null,
-    data: [visitAttributes.punctuality, visitAttributes.insurancePolicyNumber],
+    visitAttributeTypes: [visitAttributes.punctuality, visitAttributes.insurancePolicyNumber],
   })),
   useConceptAnswersForVisitAttributeType: jest.fn(() => ({
     isLoading: false,
@@ -126,8 +145,8 @@ jest.mock('../hooks/useVisitAttributeType', () => ({
   })),
 }));
 
-jest.mock('../hooks/useDefaultLocation', () => {
-  const requireActual = jest.requireActual('../hooks/useDefaultLocation');
+jest.mock('../hooks/useDefaultFacilityLocation', () => {
+  const requireActual = jest.requireActual('../hooks/useDefaultFacilityLocation');
 
   return {
     ...requireActual,
@@ -138,16 +157,33 @@ jest.mock('../hooks/useDefaultLocation', () => {
   };
 });
 
-jest.mock('../hooks/useLocations', () => {
-  const requireActual = jest.requireActual('../hooks/useLocations');
+jest.mock('./visit-form.resource', () => {
+  const requireActual = jest.requireActual('./visit-form.resource');
   return {
     ...requireActual,
-    useLocations: jest.fn(() => ({
-      locations: mockLocations,
-      isLoading: false,
-      error: null,
-    })),
+    useVisitFormCallbacks: jest.fn(),
+    createVisitAttribute: jest.fn(),
+    updateVisitAttribute: jest.fn(),
+    deleteVisitAttribute: jest.fn(),
   };
+});
+
+mockSaveVisit.mockResolvedValue({
+  status: 201,
+  data: {
+    uuid: visitUuid,
+    visitType: {
+      display: 'Facility Visit',
+    },
+  },
+} as unknown as FetchResponse<Visit>);
+
+jest.mocked(useVisitContextStore).mockReturnValue({
+  manuallySetVisitUuid: null,
+  patientUuid: null,
+  setVisitContext: jest.fn(),
+  mutateVisitCallbacks: {},
+  mutateVisit: jest.fn(),
 });
 
 describe('Visit form', () => {
@@ -167,25 +203,67 @@ describe('Visit form', () => {
         },
       ],
     });
-    mockUsePatient.mockReturnValue({
-      error: null,
-      isLoading: false,
-      patient: mockPatient,
-      patientUuid: mockPatient.id,
-    });
     mockUseVisitTypes.mockReturnValue(mockVisitTypes);
+    mockUseLocations.mockReturnValue(mockLocations);
+    mockUseEmrConfiguration.mockReturnValue({
+      emrConfiguration: {
+        atFacilityVisitType: null,
+      },
+      isLoadingEmrConfiguration: false,
+      errorFetchingEmrConfiguration: null,
+      mutateEmrConfiguration: null,
+    });
   });
 
   it('renders the Start Visit form with all the relevant fields and values', async () => {
     renderVisitForm();
 
-    expect(screen.getByRole('textbox', { name: /Date/i })).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: /Time/i })).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: /Time/i })).toBeInTheDocument();
+    // ===================
+    // Testing the visit status content switcher and how they show/hide the visit start/end fields
+    const visitStatusNew = screen.getByRole('tab', { name: /new/i });
+    const visitStatusOngoing = screen.getByRole('tab', { name: /ongoing/i });
+    const visitStatusPast = screen.getByRole('tab', { name: /in the past/i });
+    expect(visitStatusNew).toBeInTheDocument();
+    expect(visitStatusOngoing).toBeInTheDocument();
+    expect(visitStatusPast).toBeInTheDocument();
+
+    const visitStartDate = () => screen.queryByLabelText(/start date/i);
+    const visitStartTime = () => screen.queryByRole('textbox', { name: /start time/i });
+    const visitStartTimeFormat = () => screen.queryByRole('combobox', { name: /start time format/i });
+    const visitEndDate = () => screen.queryByLabelText(/end date/i);
+    const visitEndTime = () => screen.queryByRole('textbox', { name: /end time/i });
+    const visitEndTimeFormat = () => screen.queryByRole('combobox', { name: /end time format/i });
+
+    // when visit status is new, no start date / end date fields
+    await visitStatusNew.click();
+    expect(visitStartDate()).not.toBeInTheDocument();
+    expect(visitStartTime()).not.toBeInTheDocument();
+    expect(visitStartTimeFormat()).not.toBeInTheDocument();
+    expect(visitEndDate()).not.toBeInTheDocument();
+    expect(visitEndTime()).not.toBeInTheDocument();
+    expect(visitEndTimeFormat()).not.toBeInTheDocument();
+
+    // when visit status is ongoing, should have only start date fields
+    await visitStatusOngoing.click();
+    expect(visitStartDate()).toBeInTheDocument();
+    expect(visitStartTime()).toBeInTheDocument();
+    expect(visitStartTimeFormat()).toBeInTheDocument();
+    expect(visitEndDate()).not.toBeInTheDocument();
+    expect(visitEndTime()).not.toBeInTheDocument();
+    expect(visitEndTimeFormat()).not.toBeInTheDocument();
+
+    // when visit status is past, should have both start date and end date fields
+    await visitStatusPast.click();
+    expect(visitStartDate()).toBeInTheDocument();
+    expect(visitStartTime()).toBeInTheDocument();
+    expect(visitStartTimeFormat()).toBeInTheDocument();
+    expect(visitEndDate()).toBeInTheDocument();
+    expect(visitEndTime()).toBeInTheDocument();
+    expect(visitEndTimeFormat()).toBeInTheDocument();
+    // ===================
+
     expect(screen.getByRole('combobox', { name: /Select a location/i })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /HIV Return Visit/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /AM/i })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /PM/i })).toBeInTheDocument();
     expect(screen.getByText(/Punctuality/i)).toBeInTheDocument();
 
     expect(screen.getByRole('button', { name: /Start Visit/i })).toBeInTheDocument();
@@ -197,6 +275,21 @@ describe('Visit form', () => {
     await userEvent.click(combobox);
     expect(screen.getByText(/Mosoriot/i)).toBeInTheDocument();
     expect(screen.getByText(/Inpatient Ward/i)).toBeInTheDocument();
+  });
+
+  it('does not render visit type combo box if atFacilityVisitType set', async () => {
+    mockUseEmrConfiguration.mockReturnValue({
+      emrConfiguration: {
+        atFacilityVisitType: {
+          uuid: 'some-uuid1',
+        },
+      },
+      isLoadingEmrConfiguration: false,
+      errorFetchingEmrConfiguration: null,
+      mutateEmrConfiguration: null,
+    });
+    renderVisitForm();
+    expect(screen.queryByRole('radio', { name: /HIV Return Visit/ })).not.toBeInTheDocument();
   });
 
   it('renders a validation error when required fields are not filled', async () => {
@@ -216,53 +309,70 @@ describe('Visit form', () => {
     await user.click(screen.getByLabelText(/Outpatient visit/i));
   });
 
-  it('displays an error message when the visit start date is in the future', async () => {
+  it('displays an error message when the visit start time is in the future', async () => {
     const user = userEvent.setup();
 
     renderVisitForm();
 
-    const dateInput = screen.getByRole('textbox', { name: /date/i });
-    const futureDate = dayjs().add(1, 'month').format('DD/MM/YYYY');
-
-    await user.clear(dateInput);
-    await user.type(dateInput, futureDate);
-    await user.tab();
-
-    expect(screen.getByText(/start date needs to be on or before/i)).toBeInTheDocument();
-  });
-
-  // TODO: Figure out why this test is failing
-  xit('displays an error message when the visit start time is in the future', async () => {
-    const user = userEvent.setup();
-
-    renderVisitForm();
-
-    const dateInput = screen.getByRole('textbox', { name: /date/i });
-    const timeInput = screen.getByRole('textbox', { name: /time/i });
-    const amPmSelect = screen.getByRole('combobox', { name: /time format/i });
+    await user.click(screen.getByRole('tab', { name: /ongoing/i }));
+    const dateInput = screen.getByRole('textbox', { name: /start date/i });
+    const timeInput = screen.getByRole('textbox', { name: /start time/i });
+    const amPmSelect = screen.getByRole('combobox', { name: /start time format/i });
+    const saveButton = screen.getByRole('button', { name: /Start visit/i });
     const futureTime = dayjs().add(1, 'hour');
 
+    expect(dateInput).toBeEnabled();
     await user.clear(dateInput);
-    await user.type(dateInput, futureTime.format('DD/MM/YYYY'));
+    await user.click(dateInput);
+    fireEvent.change(dateInput, { target: { value: futureTime.format('YYYY-MM-DD') } });
     await user.clear(timeInput);
     await user.type(timeInput, futureTime.format('hh:mm'));
     await user.selectOptions(amPmSelect, futureTime.format('A'));
     await user.tab();
 
+    // ***
+    // For some reason, DatePicker and TimePicker does not get react hook form's zod validation
+    // errors with onChange events when in unit tests. Validation triggers only when
+    // the required fields (Visit type and location) are filled out and the save button is pressed.
+
+    // Set Visit type
+    await user.click(screen.getByLabelText(/Outpatient visit/i));
+    // Set location
+    const locationPicker = screen.getByRole('combobox', { name: /Select a location/i });
+    await user.click(locationPicker);
+    await user.click(screen.getByText('Inpatient Ward'));
+    await user.click(saveButton);
+
+    expect(timeInput).toHaveValue(futureTime.format('hh:mm'));
     expect(screen.getByText(/start time cannot be in the future/i)).toBeInTheDocument();
   });
 
-  it('starts a new visit upon successful submission of the form', async () => {
+  // FIXME: Make the date input work
+  xit('allows to enter start date in the past when visit status is ongoing', async () => {
     const user = userEvent.setup();
 
-    mockSaveVisit.mockResolvedValue({
-      status: 201,
-      data: {
-        visitType: {
-          display: 'Facility Visit',
-        },
-      },
-    } as unknown as FetchResponse<Visit>);
+    renderVisitForm();
+
+    await user.click(screen.getByRole('tab', { name: /ongoing/i }));
+    const dateInput = screen.queryByLabelText(/start date/i) as HTMLInputElement;
+    const timeInput = screen.getByRole('textbox', { name: /start time/i }) as HTMLInputElement;
+    const amPmSelect = screen.getByRole('combobox', { name: /start time format/i });
+    const pastTime = dayjs().subtract(1, 'month');
+
+    expect(dateInput).toBeEnabled();
+    await user.clear(dateInput);
+    await user.click(dateInput);
+    await user.type(dateInput, pastTime.format('DD/MM/YYYY') + '{enter}');
+    await user.tab();
+    await user.type(timeInput, pastTime.format('hh:mm'));
+    await user.selectOptions(amPmSelect, pastTime.format('A'));
+    await user.tab();
+
+    expect(dateInput).toHaveValue(pastTime.format('DD/MM/YYYY'));
+  });
+
+  it('create a new visit upon successful submission of the form', async () => {
+    const user = userEvent.setup();
 
     renderVisitForm();
 
@@ -277,14 +387,15 @@ describe('Visit form', () => {
     await user.click(screen.getByText('Inpatient Ward'));
 
     await user.click(saveButton);
-
     expect(mockSaveVisit).toHaveBeenCalledTimes(1);
     expect(mockSaveVisit).toHaveBeenCalledWith(
-      expect.objectContaining({
+      {
         location: mockLocations[1].uuid,
         patient: mockPatient.id,
         visitType: 'some-uuid1',
-      }),
+        startDatetime: null,
+        stopDatetime: null,
+      },
       expect.any(Object),
     );
 
@@ -299,8 +410,6 @@ describe('Visit form', () => {
 
   it('starts a new visit with attributes upon successful submission of the form', async () => {
     const user = userEvent.setup();
-
-    mockOpenmrsFetch.mockResolvedValue({} as unknown as FetchResponse);
 
     renderVisitForm();
 
@@ -321,54 +430,52 @@ describe('Visit form', () => {
     await user.clear(insuranceNumberInput);
     await user.type(insuranceNumberInput, '183299');
 
-    mockSaveVisit.mockResolvedValue({
-      status: 201,
-      data: {
-        uuid: visitUuid,
-        visitType: {
-          display: 'Facility Visit',
-        },
-      },
-    } as unknown as FetchResponse<Visit>);
-
     await user.click(saveButton);
 
     expect(mockSaveVisit).toHaveBeenCalledTimes(1);
     expect(mockSaveVisit).toHaveBeenCalledWith(
-      expect.objectContaining({
+      {
         location: mockLocations[1].uuid,
         patient: mockPatient.id,
         visitType: 'some-uuid1',
-      }),
+        startDatetime: null,
+        stopDatetime: null,
+      },
       expect.any(Object),
     );
 
-    expect(mockOpenmrsFetch).toHaveBeenCalledWith(`${restBaseUrl}/visit/${visitUuid}/attribute`, {
-      method: 'POST',
-      headers: { 'Content-type': 'application/json' },
-      body: { attributeType: visitAttributes.punctuality.uuid, value: '66cdc0a1-aa19-4676-af51-80f66d78d9eb' },
-    });
+    expect(mockCreateVisitAttribute).toHaveBeenCalledTimes(2);
+    expect(mockCreateVisitAttribute).toHaveBeenCalledWith(
+      visitUuid,
+      visitAttributes.punctuality.uuid,
+      '66cdc0a1-aa19-4676-af51-80f66d78d9eb',
+    );
+    expect(mockCreateVisitAttribute).toHaveBeenCalledWith(
+      visitUuid,
+      visitAttributes.insurancePolicyNumber.uuid,
+      '183299',
+    );
 
-    expect(mockOpenmrsFetch).toHaveBeenCalledWith(`${restBaseUrl}/visit/${visitUuid}/attribute`, {
-      method: 'POST',
-      headers: { 'Content-type': 'application/json' },
-      body: { attributeType: visitAttributes.insurancePolicyNumber.uuid, value: '183299' },
-    });
+    expect(mockOnVisitCreatedOrUpdatedCallback).toHaveBeenCalled();
 
     expect(mockCloseWorkspace).toHaveBeenCalled();
 
+    expect(showSnackbar).toHaveBeenCalledTimes(2);
     expect(showSnackbar).toHaveBeenCalledWith({
       isLowContrast: true,
       subtitle: expect.stringContaining('started successfully'),
       kind: 'success',
       title: 'Visit started',
     });
+    expect(showSnackbar).toHaveBeenCalledWith({
+      isLowContrast: true,
+      title: expect.stringContaining('Additional visit information updated successfully'),
+      kind: 'success',
+    });
   });
 
   it('updates visit attributes when editing an existing visit', async () => {
     const user = userEvent.setup();
-
-    mockOpenmrsFetch.mockResolvedValue({} as unknown as FetchResponse);
 
     renderVisitForm(mockVisitWithAttributes);
 
@@ -410,23 +517,13 @@ describe('Visit form', () => {
       expect.any(Object),
     );
 
-    expect(mockOpenmrsFetch).toHaveBeenCalledWith(
-      `${restBaseUrl}/visit/${visitUuid}/attribute/c98e66d7-7db5-47ae-b46f-91a0f3b6dda1`,
-      {
-        method: 'POST',
-        headers: { 'Content-type': 'application/json' },
-        body: { value: '66cdc0a1-aa19-4676-af51-80f66d78d9ec' },
-      },
+    expect(mockUpdateVisitAttribute).toHaveBeenCalledTimes(2);
+    expect(mockUpdateVisitAttribute).toHaveBeenCalledWith(
+      visitUuid,
+      'c98e66d7-7db5-47ae-b46f-91a0f3b6dda1',
+      '66cdc0a1-aa19-4676-af51-80f66d78d9ec',
     );
-
-    expect(mockOpenmrsFetch).toHaveBeenCalledWith(
-      `${restBaseUrl}/visit/${visitUuid}/attribute/d6d7d26a-5975-4f03-8abb-db073c948897`,
-      {
-        method: 'POST',
-        headers: { 'Content-type': 'application/json' },
-        body: { value: '1873290' },
-      },
-    );
+    expect(mockUpdateVisitAttribute).toHaveBeenCalledWith(visitUuid, 'd6d7d26a-5975-4f03-8abb-db073c948897', '1873290');
 
     expect(mockCloseWorkspace).toHaveBeenCalled();
     expect(showSnackbar).toHaveBeenCalledWith({
@@ -439,8 +536,6 @@ describe('Visit form', () => {
 
   it('deletes visit attributes if the value of the field is cleared when editing an existing visit', async () => {
     const user = userEvent.setup();
-
-    mockOpenmrsFetch.mockResolvedValue({} as FetchResponse);
 
     renderVisitForm(mockVisitWithAttributes);
 
@@ -481,15 +576,9 @@ describe('Visit form', () => {
       expect.any(Object),
     );
 
-    expect(mockOpenmrsFetch).toHaveBeenCalledWith(
-      `${restBaseUrl}/visit/${visitUuid}/attribute/c98e66d7-7db5-47ae-b46f-91a0f3b6dda1`,
-      { method: 'DELETE' },
-    );
-
-    expect(mockOpenmrsFetch).toHaveBeenCalledWith(
-      `${restBaseUrl}/visit/${visitUuid}/attribute/d6d7d26a-5975-4f03-8abb-db073c948897`,
-      { method: 'DELETE' },
-    );
+    expect(mockDeleteVisitAttribute).toHaveBeenCalledTimes(2);
+    expect(mockDeleteVisitAttribute).toHaveBeenCalledWith(visitUuid, 'c98e66d7-7db5-47ae-b46f-91a0f3b6dda1');
+    expect(mockDeleteVisitAttribute).toHaveBeenCalledWith(visitUuid, 'd6d7d26a-5975-4f03-8abb-db073c948897');
 
     expect(mockCloseWorkspace).toHaveBeenCalled();
 
@@ -504,7 +593,7 @@ describe('Visit form', () => {
   it('renders an error message if there was a problem starting a new visit', async () => {
     const user = userEvent.setup();
 
-    mockSaveVisit.mockRejectedValue({ status: 500, statusText: 'Internal server error' });
+    mockSaveVisit.mockRejectedValueOnce({ status: 500, statusText: 'Internal server error' });
 
     renderVisitForm();
 
@@ -513,7 +602,7 @@ describe('Visit form', () => {
     const saveButton = screen.getByRole('button', { name: /Start Visit/i });
     const locationPicker = screen.getByRole('combobox', { name: /Select a location/i });
     await user.click(locationPicker);
-    await user.click(screen.getByText('Inpatient Ward'));
+    await user.click(screen.getByText(/Inpatient Ward/i));
 
     await user.click(saveButton);
 
@@ -524,6 +613,56 @@ describe('Visit form', () => {
         title: 'Error starting visit',
       }),
     );
+
+    expect(mockOnVisitCreatedOrUpdatedCallback).not.toHaveBeenCalled();
+    expect(mockCloseWorkspace).not.toHaveBeenCalled();
+  });
+
+  it('renders an error message if there was a problem updating visit attributes after starting a new visit', async () => {
+    const user = userEvent.setup();
+
+    mockCreateVisitAttribute.mockRejectedValue({ status: 500, statusText: 'Internal server error' });
+
+    renderVisitForm();
+
+    await user.click(screen.getByLabelText(/Outpatient visit/i));
+
+    const saveButton = screen.getByRole('button', { name: /Start Visit/i });
+    const locationPicker = screen.getByRole('combobox', { name: /Select a location/i });
+    await user.click(locationPicker);
+    await user.click(screen.getByText(/Inpatient Ward/i));
+
+    const punctualityPicker = screen.getByRole('combobox', { name: 'Punctuality (optional)' });
+    await user.selectOptions(punctualityPicker, 'On time');
+
+    const insuranceNumberInput = screen.getByRole('textbox', { name: 'Insurance Policy Number (optional)' });
+    await user.clear(insuranceNumberInput);
+    await user.type(insuranceNumberInput, '183299');
+
+    await user.click(saveButton);
+
+    expect(showSnackbar).toHaveBeenCalledTimes(3);
+    expect(showSnackbar).toHaveBeenCalledWith({
+      isLowContrast: true,
+      subtitle: expect.stringContaining('started successfully'),
+      kind: 'success',
+      title: 'Visit started',
+    });
+    expect(showSnackbar).toHaveBeenCalledWith({
+      isLowContrast: false,
+      subtitle: undefined,
+      kind: 'error',
+      title: 'Error creating the Punctuality visit attribute',
+    });
+    expect(showSnackbar).toHaveBeenCalledWith({
+      isLowContrast: false,
+      subtitle: undefined,
+      kind: 'error',
+      title: 'Error creating the Insurance Policy Number visit attribute',
+    });
+
+    expect(mockOnVisitCreatedOrUpdatedCallback).toHaveBeenCalled();
+    expect(mockCloseWorkspace).not.toHaveBeenCalled();
   });
 
   it('displays a warning modal if the user attempts to discard the visit form with unsaved changes', async () => {
@@ -568,15 +707,6 @@ describe('Visit form', () => {
       ],
     });
 
-    mockSaveVisit.mockResolvedValue({
-      status: 201,
-      data: {
-        visitType: {
-          display: 'Facility Visit',
-        },
-      },
-    } as unknown as FetchResponse<Visit>);
-
     renderVisitForm();
 
     const saveButton = screen.getByRole('button', { name: /Start visit/i });
@@ -619,6 +749,124 @@ describe('Visit form', () => {
   });
 });
 
+// Note: For some reason, DatePicker and TimePicker don't get validated properly
+// by react hook form + zod when in test. Here, we test validation of
+// start / end time fields through the useVisitFormSchemaAndDefaultValues hook instead
+describe('useVisitFormSchemaAndDefaultValues', () => {
+  beforeEach(() => {
+    mockUseConfig.mockReturnValue({
+      ...getDefaultsFromConfigSchema(esmPatientChartSchema),
+      visitAttributeTypes: [
+        {
+          uuid: visitAttributes.punctuality.uuid,
+          required: false,
+          displayInThePatientBanner: true,
+        },
+        {
+          uuid: visitAttributes.insurancePolicyNumber.uuid,
+          required: false,
+          displayInThePatientBanner: true,
+        },
+      ],
+    });
+  });
+  it('should validate start and end times', async () => {
+    const {
+      result: {
+        current: { visitFormSchema, defaultValues },
+      },
+    } = renderHook(() => useVisitFormSchemaAndDefaultValues(mockPastVisitWithEncounters));
+
+    // verify start time set to past end time
+    const stopDateTime = dayjs(mockPastVisitWithEncounters.stopDatetime);
+    const badStartTimePastStopTime = stopDateTime.add(1, 'hour');
+    const badStartTimePastStopTimeFields = convertToDateTimeFields(badStartTimePastStopTime);
+    const {
+      error: { issues: badStartTimePastStopTimeIssues },
+    } = visitFormSchema.safeParse({
+      ...defaultValues,
+      visitStartDate: badStartTimePastStopTimeFields.date,
+      visitStartTime: badStartTimePastStopTimeFields.time,
+      visitStartTimeFormat: badStartTimePastStopTimeFields.timeFormat,
+    });
+    expect(badStartTimePastStopTimeIssues).toContainEqual(
+      expect.objectContaining({
+        message: 'End time must be after start time', //'Visit start time cannot be in the future'
+      }),
+    );
+
+    // verify start time set to future
+    const badStartTimeInFuture = dayjs().add(1, 'hour');
+    const badStartTimeInFutureFields = convertToDateTimeFields(badStartTimeInFuture);
+    const {
+      error: { issues: badStartTimeInFutureIssues },
+    } = visitFormSchema.safeParse({
+      ...defaultValues,
+      visitStartDate: badStartTimeInFutureFields.date,
+      visitStartTime: badStartTimeInFutureFields.time,
+      visitStartTimeFormat: badStartTimeInFutureFields.timeFormat,
+    });
+    expect(badStartTimeInFutureIssues).toContainEqual(
+      expect.objectContaining({
+        message: 'Start time cannot be in the future',
+      }),
+    );
+
+    // verity start time set past first encounter time
+    const firstEncounterDatetime = dayjs(mockPastVisitWithEncounters.encounters[0].encounterDatetime);
+    const badStartTimeAfterEncounterTime = firstEncounterDatetime.add(1, 'minute');
+    const badStartTimeAfterEncounterTimeFields = convertToDateTimeFields(badStartTimeAfterEncounterTime);
+    const {
+      error: { issues: badStartTimeAfterEncounterTimeIssues },
+    } = visitFormSchema.safeParse({
+      ...defaultValues,
+      visitStartDate: badStartTimeAfterEncounterTimeFields.date,
+      visitStartTime: badStartTimeAfterEncounterTimeFields.time,
+      visitStartTimeFormat: badStartTimeAfterEncounterTimeFields.timeFormat,
+    });
+    expect(badStartTimeAfterEncounterTimeIssues).toContainEqual(
+      expect.objectContaining({
+        message: 'Start time must be on or before ' + firstEncounterDatetime.toDate().toLocaleString(),
+      }),
+    );
+
+    // verify stop time set to future
+    const badStopTimeInFuture = dayjs().add(1, 'hour');
+    const badStopTimeInFutureFields = convertToDateTimeFields(badStopTimeInFuture);
+    const {
+      error: { issues: badStopTimeInFutureIssues },
+    } = visitFormSchema.safeParse({
+      ...defaultValues,
+      visitStopDate: badStopTimeInFutureFields.date,
+      visitStopTime: badStopTimeInFutureFields.time,
+      visitStopTimeFormat: badStopTimeInFutureFields.timeFormat,
+    });
+    expect(badStopTimeInFutureIssues).toContainEqual(
+      expect.objectContaining({
+        message: 'End time cannot be in the future',
+      }),
+    );
+
+    // verify stop time set to before last encounter
+    const lastEncounterDatetime = dayjs(mockPastVisitWithEncounters.encounters[1].encounterDatetime);
+    const badStopTimeBeforeLastEncounter = lastEncounterDatetime.subtract(1, 'minute');
+    const badStopTimeBeforeLastEncounterFields = convertToDateTimeFields(badStopTimeBeforeLastEncounter);
+    const {
+      error: { issues: badStopTimeBeforeLastEncounterIssues },
+    } = visitFormSchema.safeParse({
+      ...defaultValues,
+      visitStopDate: badStopTimeBeforeLastEncounterFields.date,
+      visitStopTime: badStopTimeBeforeLastEncounterFields.time,
+      visitStopTimeFormat: badStopTimeBeforeLastEncounterFields.timeFormat,
+    });
+    expect(badStopTimeBeforeLastEncounterIssues).toContainEqual(
+      expect.objectContaining({
+        message: 'End time must be on or after ' + lastEncounterDatetime.toDate().toLocaleString(),
+      }),
+    );
+  });
+});
+
 function renderVisitForm(visitToEdit?: Visit) {
-  render(<StartVisitForm {...{ ...testProps, visitToEdit }} />);
+  return render(<VisitForm {...{ ...testProps, visitToEdit }} />);
 }

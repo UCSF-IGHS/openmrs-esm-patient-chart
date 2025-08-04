@@ -1,24 +1,15 @@
 import React from 'react';
 import userEvent from '@testing-library/user-event';
 import { screen, within } from '@testing-library/react';
-import { getDefaultsFromConfigSchema, openmrsFetch, useConfig } from '@openmrs/esm-framework';
-import { launchPatientWorkspace } from '@openmrs/esm-patient-common-lib';
+import { getDefaultsFromConfigSchema, launchWorkspace, openmrsFetch, useConfig } from '@openmrs/esm-framework';
 import { mockCareProgramsResponse, mockEnrolledInAllProgramsResponse, mockEnrolledProgramsResponse } from '__mocks__';
 import { mockPatient, renderWithSwr, waitForLoadingToFinish } from 'tools';
 import { type ConfigObject, configSchema } from '../config-schema';
 import ProgramsDetailedSummary from './programs-detailed-summary.component';
 
-const mockOpenmrsFetch = openmrsFetch as jest.Mock;
+const mockLaunchWorkspace = jest.mocked(launchWorkspace);
 const mockUseConfig = jest.mocked(useConfig<ConfigObject>);
-
-jest.mock('@openmrs/esm-patient-common-lib', () => {
-  const originalModule = jest.requireActual('@openmrs/esm-patient-common-lib');
-
-  return {
-    ...originalModule,
-    launchPatientWorkspace: jest.fn(),
-  };
-});
+const mockOpenmrsFetch = openmrsFetch as jest.Mock;
 
 describe('ProgramsDetailedSummary', () => {
   it('renders an empty state view when the patient is not enrolled into any programs', async () => {
@@ -29,8 +20,8 @@ describe('ProgramsDetailedSummary', () => {
     await waitForLoadingToFinish();
 
     expect(screen.getByText(/Care Programs/i)).toBeInTheDocument();
-    expect(screen.getByText(/There are no program enrollments to display for this patient/)).toBeInTheDocument();
-    expect(screen.getByText(/Record program enrollments/)).toBeInTheDocument();
+    expect(screen.getByText(/There are no program enrollments to display for this patient/i)).toBeInTheDocument();
+    expect(screen.getByText(/Record program enrollments/i)).toBeInTheDocument();
   });
 
   it('renders an error state view if there is a problem fetching program enrollments', async () => {
@@ -77,20 +68,23 @@ describe('ProgramsDetailedSummary', () => {
     expect(row).toBeInTheDocument();
     expect(within(row).getByRole('cell', { name: /16-Jan-2020/i })).toBeInTheDocument();
     expect(within(row).getByRole('cell', { name: /active$/i })).toBeInTheDocument();
-    const editButton = within(row).getByRole('button', { name: /Edit Program$/i });
-    expect(editButton).toBeInTheDocument();
+    const actionMenuButton = within(row).getByRole('button', { name: /options$/i });
+    expect(actionMenuButton).toBeInTheDocument();
+
+    await user.click(actionMenuButton);
 
     // Clicking "Add" launches the programs form in a workspace
     expect(addButton).toBeEnabled();
     await user.click(addButton);
 
-    expect(launchPatientWorkspace).toHaveBeenCalledWith('programs-form-workspace');
+    expect(mockLaunchWorkspace).toHaveBeenCalledWith('programs-form-workspace');
 
-    // Clicking the edit button launches the edit form in a workspace
-    await user.click(editButton);
+    await user.click(actionMenuButton);
+    await user.click(screen.getByText('Edit'));
 
-    expect(launchPatientWorkspace).toHaveBeenCalledWith('programs-form-workspace', {
+    expect(mockLaunchWorkspace).toHaveBeenCalledWith('programs-form-workspace', {
       programEnrollmentId: mockEnrolledProgramsResponse[0].uuid,
+      workspaceTitle: 'Edit program enrollment',
     });
   });
 
@@ -110,9 +104,7 @@ describe('ProgramsDetailedSummary', () => {
     expect(screen.getByText(/there are no more programs left to enroll this patient in/i)).toBeInTheDocument();
   });
 
-  it('renders the programs status field', async () => {
-    const user = userEvent.setup();
-
+  it('conditionally renders the programs status field', async () => {
     mockOpenmrsFetch.mockReturnValueOnce({ data: { results: mockEnrolledProgramsResponse } });
 
     mockUseConfig.mockReturnValue({

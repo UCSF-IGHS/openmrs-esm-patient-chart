@@ -27,10 +27,14 @@ export const programsDashboardLink =
   getSyncLifecycle(
     createDashboardLink({
       ...dashboardMeta,
-      moduleName,
     }),
     options,
   );
 
 // t('programEnrollmentWorkspaceTitle', 'Record program enrollment')
 export const programsFormWorkspace = getAsyncLifecycle(() => import('./programs/programs-form.workspace'), options);
+
+export const deleteProgramConfirmationModal = getAsyncLifecycle(
+  () => import('./programs/delete-program.modal'),
+  options,
+);

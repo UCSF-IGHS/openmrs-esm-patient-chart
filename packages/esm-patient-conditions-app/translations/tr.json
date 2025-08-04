@@ -1,4 +1,5 @@
 {
+  "actions": "Actions",
   "active": "Active",
   "add": "Add",
   "cancel": "Cancel",
@@ -11,6 +12,7 @@
   "conditionRequired": "A condition is required",
   "conditions": "Conditions",
   "Conditions": "Conditions",
+  "conditions_lower": "conditions",
   "conditionSaved": "Condition saved successfully",
   "conditionUpdated": "Condition updated",
   "dateOfOnset": "Date of onset",
@@ -29,6 +31,7 @@
   "noConditionsToDisplay": "No conditions to display",
   "noResultsFor": "No results for",
   "onsetDate": "Onset date",
+  "onsetDateCannotBeInTheFuture": "Onset date cannot be in the future",
   "recordCondition": "Record a Condition",
   "required": "Required",
   "saveAndClose": "Save & close",

@@ -1,10 +1,11 @@
 import { useCallback, useMemo } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
-import { type FetchResponse, openmrsFetch, restBaseUrl } from '@openmrs/esm-framework';
-import { type OrderTypeFetchResponse, type PatientOrderFetchResponse } from '@openmrs/esm-patient-common-lib';
+import { type FetchResponse, openmrsFetch, restBaseUrl, translateFrom } from '@openmrs/esm-framework';
+import type { PatientOrderFetchResponse, PriorityOption } from './types';
 
 export type Status = 'ACTIVE' | 'any';
 export const careSettingUuid = '6f0c9a92-6f24-11e3-af88-005056821db0';
+const patientChartAppModuleName = '@openmrs/esm-patient-chart-app';
 
 export const drugCustomRepresentation =
   'custom:(uuid,dosingType,orderNumber,accessionNumber,' +
@@ -14,10 +15,19 @@ export const drugCustomRepresentation =
   'frequency:ref,asNeeded,asNeededCondition,quantity,quantityUnits:ref,numRefills,dosingInstructions,' +
   'duration,durationUnits:ref,route:ref,brandName,dispenseAsWritten)';
 
-export function usePatientOrders(patientUuid: string, status?: Status, orderType?: string) {
+export function usePatientOrders(
+  patientUuid: string,
+  status?: Status,
+  orderType?: string,
+  startDate?: string,
+  endDate?: string,
+) {
   const { mutate } = useSWRConfig();
-  const baseOrdersUrl = `${restBaseUrl}/order?patient=${patientUuid}&careSetting=${careSettingUuid}&v=full&status=${status}`;
-  const ordersUrl = orderType ? `${baseOrdersUrl}&orderType=${orderType}` : baseOrdersUrl;
+  const baseOrdersUrl =
+    startDate && endDate
+      ? `${restBaseUrl}/order?patient=${patientUuid}&careSetting=${careSettingUuid}&v=full&activatedOnOrAfterDate=${startDate}&activatedOnOrBeforeDate=${endDate}`
+      : `${restBaseUrl}/order?patient=${patientUuid}&careSetting=${careSettingUuid}&v=full&status=${status}`;
+  const ordersUrl = orderType ? `${baseOrdersUrl}&orderTypes=${orderType}` : baseOrdersUrl;
 
   const { data, error, isLoading, isValidating } = useSWR<FetchResponse<PatientOrderFetchResponse>, Error>(
     patientUuid ? ordersUrl : null,
@@ -47,21 +57,13 @@ export function usePatientOrders(patientUuid: string, status?: Status, orderType
   };
 }
 
-export function useOrderTypes() {
-  const orderTypesUrl = `${restBaseUrl}/ordertype`;
-  const { data, error, isLoading, isValidating } = useSWR<FetchResponse<OrderTypeFetchResponse>, Error>(
-    orderTypesUrl,
-    openmrsFetch,
-  );
-
-  return {
-    data: data?.data?.results ?? null,
-    error,
-    isLoading,
-    isValidating,
-  };
-}
-
 export function getDrugOrderByUuid(orderUuid: string) {
   return openmrsFetch(`${restBaseUrl}/order/${orderUuid}?v=${drugCustomRepresentation}`);
 }
+
+// See the Urgency enum in https://github.com/openmrs/openmrs-core/blob/492dcd35b85d48730bd19da48f6db146cc882c22/api/src/main/java/org/openmrs/Order.java
+export const priorityOptions: PriorityOption[] = [
+  { value: 'ROUTINE', label: translateFrom(patientChartAppModuleName, 'Routine') },
+  { value: 'STAT', label: translateFrom(patientChartAppModuleName, 'Stat') },
+  { value: 'ON_SCHEDULED_DATE', label: translateFrom(patientChartAppModuleName, 'On scheduled date') },
+];

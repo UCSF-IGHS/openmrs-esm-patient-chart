@@ -45,7 +45,7 @@ import { type ConfigObject } from '../config-schema';
 import PrintComponent from '../print/print.component';
 import styles from './medications-details-table.scss';
 
-export interface ActiveMedicationsProps {
+export interface MedicationsDetailsTableProps {
   isValidating?: boolean;
   title?: string;
   medications?: Array<Order> | null;
@@ -56,7 +56,7 @@ export interface ActiveMedicationsProps {
   patient: fhir.Patient;
 }
 
-const MedicationsDetailsTable: React.FC<ActiveMedicationsProps> = ({
+const MedicationsDetailsTable: React.FC<MedicationsDetailsTableProps> = ({
   isValidating,
   title,
   medications,
@@ -70,7 +70,7 @@ const MedicationsDetailsTable: React.FC<ActiveMedicationsProps> = ({
   const { t } = useTranslation();
   const launchOrderBasket = useLaunchWorkspaceRequiringVisit('order-basket');
   const launchAddDrugOrder = useLaunchWorkspaceRequiringVisit('add-drug-order');
-  const config = useConfig() as ConfigObject;
+  const config = useConfig<ConfigObject>();
   const showPrintButton = config.showPrintButton;
   const contentToPrintRef = useRef(null);
   const { excludePatientIdentifierCodeTypes } = useConfig();
@@ -143,11 +143,12 @@ const MedicationsDetailsTable: React.FC<ActiveMedicationsProps> = ({
                 <span className={styles.label01}>{t('indication', 'Indication').toUpperCase()}</span>{' '}
                 {medication.orderReasonNonCoded}
               </span>
-            )}
+            )}{' '}
+            {medication.orderReasonNonCoded && medication.quantity && <>&mdash;</>}
             {medication.quantity && (
               <span>
-                <span className={styles.label01}> &mdash; {t('quantity', 'Quantity').toUpperCase()}</span>{' '}
-                {medication.quantity} {medication?.quantityUnits?.display}
+                <span className={styles.label01}> {t('quantity', 'Quantity').toUpperCase()}</span> {medication.quantity}{' '}
+                {medication?.quantityUnits?.display}
               </span>
             )}
           </p>
@@ -278,13 +279,12 @@ const MedicationsDetailsTable: React.FC<ActiveMedicationsProps> = ({
                       <TableHeader
                         {...getHeaderProps({
                           header,
-                          isSortable: header.isSortable,
                         })}
                       >
                         {header.header}
                       </TableHeader>
                     ))}
-                    <TableHeader />
+                    <TableHeader aria-label={t('actions', 'Actions')} />
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -330,16 +330,9 @@ const MedicationsDetailsTable: React.FC<ActiveMedicationsProps> = ({
 
 function InfoTooltip({ orderer }: { orderer: string }) {
   return (
-    <IconButton
-      className={styles.tooltip}
-      align="top-left"
-      direction="top"
-      label={orderer}
-      renderIcon={(props: ComponentProps<typeof UserIcon>) => <UserIcon size={16} {...props} />}
-      iconDescription={orderer}
-      kind="ghost"
-      size="sm"
-    />
+    <IconButton className={styles.tooltip} align="top-left" label={orderer} kind="ghost" size="sm">
+      <UserIcon size={16} />
+    </IconButton>
   );
 }
 
@@ -514,13 +507,7 @@ function OrderBasketItemActions({
   }, [items, setItems, medication, openOrderBasket]);
 
   return (
-    <OverflowMenu
-      aria-label="Actions menu"
-      selectorPrimaryFocus={'#modify'}
-      flipped
-      size={isTablet ? 'lg' : 'md'}
-      align="left"
-    >
+    <OverflowMenu aria-label="Actions menu" selectorPrimaryFocus={'#modify'} flipped size={isTablet ? 'lg' : 'md'}>
       {showModifyButton && (
         <OverflowMenuItem
           className={styles.menuItem}

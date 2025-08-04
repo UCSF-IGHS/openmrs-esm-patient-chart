@@ -42,6 +42,10 @@ export const configSchema = {
       _type: Type.ConceptUuid,
       _default: '1343AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
     },
+    vitalSignsConceptSetUuid: {
+      _type: Type.ConceptUuid,
+      _default: '1114AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+    },
   },
   vitals: {
     useFormEngine: {
@@ -54,10 +58,15 @@ export const configSchema = {
       _type: Type.UUID,
       _default: '67a71486-1a54-468f-ac3e-7091a9a79584',
     },
+    vitalsOverdueThresholdHours: {
+      _type: Type.Number,
+      _default: 12,
+      _description: 'Hours at or above which vitals are considered overdue',
+    },
     logo: {
       src: {
         _type: Type.String,
-        _default: null,
+        _default: '',
         _description: 'A path or URL to an image. Defaults to the OpenMRS SVG sprite.',
       },
       alt: {
@@ -67,7 +76,7 @@ export const configSchema = {
       },
       name: {
         _type: Type.String,
-        _default: null,
+        _default: '',
         _description: 'The organization name displayed when image is absent',
       },
     },
@@ -105,6 +114,12 @@ export interface BiometricsConfigObject {
   weightUnit: string;
 }
 
+export interface LogoConfigObject {
+  src: string;
+  alt: string;
+  name: string;
+}
+
 export interface ConfigObject {
   concepts: {
     systolicBloodPressureUuid: string;
@@ -115,11 +130,15 @@ export interface ConfigObject {
     heightUuid: string;
     weightUuid: string;
     respiratoryRateUuid: string;
+    generalPatientNoteUuid: string;
     midUpperArmCircumferenceUuid: string;
+    vitalSignsConceptSetUuid: string;
   };
   vitals: {
     useFormEngine: boolean;
     encounterTypeUuid: string;
+    vitalsOverdueThresholdHours: number;
+    logo: LogoConfigObject;
     formUuid: string;
     formName: string;
     useMuacColors: boolean;

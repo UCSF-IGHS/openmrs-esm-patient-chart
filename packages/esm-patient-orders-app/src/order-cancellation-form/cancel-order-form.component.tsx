@@ -4,19 +4,8 @@ import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  Button,
-  TextArea,
-  ButtonSet,
-  Column,
-  Form,
-  InlineNotification,
-  Stack,
-  DatePicker,
-  DatePickerInput,
-  InlineLoading,
-} from '@carbon/react';
-import { showSnackbar, useLayoutType } from '@openmrs/esm-framework';
+import { Button, TextArea, ButtonSet, Column, Form, InlineNotification, Stack, InlineLoading } from '@carbon/react';
+import { OpenmrsDatePicker, showSnackbar, useLayoutType } from '@openmrs/esm-framework';
 import { type DefaultPatientWorkspaceProps, usePatientOrders, type Order } from '@openmrs/esm-patient-common-lib';
 import { cancelOrder } from './cancel-order.resource';
 import styles from './cancel-order-form.scss';
@@ -33,7 +22,6 @@ const OrderCancellationForm: React.FC<OrderCancellationFormProps> = ({
 }) => {
   const { t } = useTranslation();
   const isTablet = useLayoutType() === 'tablet';
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showErrorNotification, setShowErrorNotification] = useState(false);
   const { mutate } = usePatientOrders(patientUuid);
 
@@ -57,7 +45,7 @@ const OrderCancellationForm: React.FC<OrderCancellationFormProps> = ({
   const {
     control,
     handleSubmit,
-    formState: { errors, isDirty },
+    formState: { errors, isDirty, isSubmitting },
   } = useForm<CancelOrderFormData>({
     mode: 'all',
     resolver: zodResolver(cancelOrderSchema),
@@ -77,7 +65,6 @@ const OrderCancellationForm: React.FC<OrderCancellationFormProps> = ({
     (data: CancelOrderFormData) => {
       const formData = data;
       setShowErrorNotification(false);
-      setIsSubmitting(true);
 
       const payload = {
         fulfillerStatus: 'DECLINED',
@@ -86,7 +73,6 @@ const OrderCancellationForm: React.FC<OrderCancellationFormProps> = ({
 
       cancelOrder(order, payload).then(
         (res) => {
-          setIsSubmitting(false);
           closeWorkspace();
           mutate();
 
@@ -99,7 +85,6 @@ const OrderCancellationForm: React.FC<OrderCancellationFormProps> = ({
           });
         },
         (err) => {
-          setIsSubmitting(false);
           showSnackbar({
             isLowContrast: true,
             title: t('errorCancellingOrder', 'Error cancelling order'),
@@ -123,26 +108,16 @@ const OrderCancellationForm: React.FC<OrderCancellationFormProps> = ({
             <Controller
               name="cancellationDate"
               control={control}
-              render={({ field: { onChange, value } }) => (
+              render={({ field, fieldState }) => (
                 <div className={styles.row}>
-                  <DatePicker
+                  <OpenmrsDatePicker
+                    {...field}
                     id="cancellationDate"
                     minDate={dayjs().startOf('day')}
-                    dateFormat="d/m/Y"
-                    datePickerType="single"
-                    value={value}
-                    onChange={([date]) => onChange(date)}
-                    autocomplete="off"
-                  >
-                    <DatePickerInput
-                      id="date-picker-calendar-id"
-                      placeholder="dd/mm/yyyy"
-                      labelText={t('cancellationDate', 'Cancellation date')}
-                      type="text"
-                      invalid={!!errors['cancellationDate']}
-                      invalidText={!!errors['cancellationDate'] && errors['cancellationDate'].message}
-                    />
-                  </DatePicker>
+                    labelText={t('cancellationDate', 'Cancellation date')}
+                    invalid={Boolean(fieldState?.error?.message)}
+                    invalidText={fieldState?.error?.message}
+                  />
                 </div>
               )}
             />
@@ -181,7 +156,7 @@ const OrderCancellationForm: React.FC<OrderCancellationFormProps> = ({
       )}
 
       <ButtonSet className={isTablet ? styles.tablet : styles.desktop}>
-        <Button className={styles.button} kind="secondary" onClick={closeWorkspace}>
+        <Button className={styles.button} kind="secondary" onClick={() => closeWorkspace()}>
           {t('discard', 'Discard')}
         </Button>
         <Button

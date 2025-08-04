@@ -4,8 +4,6 @@ import classNames from 'classnames';
 import dayjs from 'dayjs';
 import 'dayjs/plugin/utc';
 import {
-  DatePicker,
-  DatePickerInput,
   FormGroup,
   FormLabel,
   InlineLoading,
@@ -18,11 +16,11 @@ import {
 } from '@carbon/react';
 import { WarningFilled } from '@carbon/react/icons';
 import { useFormContext, Controller } from 'react-hook-form';
-import { showSnackbar, useDebounce, useSession, ResponsiveWrapper } from '@openmrs/esm-framework';
+import { showSnackbar, useDebounce, useSession, ResponsiveWrapper, OpenmrsDatePicker } from '@openmrs/esm-framework';
 import { type DefaultPatientWorkspaceProps } from '@openmrs/esm-patient-common-lib';
 import {
   type CodedCondition,
-  type ConditionDataTableRow,
+  type Condition,
   type FormFields,
   createCondition,
   updateCondition,
@@ -34,7 +32,7 @@ import styles from './conditions-form.scss';
 
 interface ConditionsWidgetProps {
   closeWorkspaceWithSavedChanges?: DefaultPatientWorkspaceProps['closeWorkspaceWithSavedChanges'];
-  conditionToEdit?: ConditionDataTableRow;
+  conditionToEdit?: Condition;
   isEditing?: boolean;
   isSubmittingForm: boolean;
   patientUuid: string;
@@ -47,6 +45,15 @@ interface ConditionsWidgetProps {
 interface RequiredFieldLabelProps {
   label: string;
   t: TFunction;
+}
+
+interface SearchResultsProps {
+  isSearching: boolean;
+  onConditionChange: (condition: CodedCondition) => void;
+  searchResults: CodedCondition[];
+  selectedCondition: CodedCondition;
+  t: TFunction;
+  value: string;
 }
 
 const ConditionsWidget: React.FC<ConditionsWidgetProps> = ({
@@ -72,19 +79,9 @@ const ConditionsWidget: React.FC<ConditionsWidgetProps> = ({
   const clinicalStatus = watch('clinicalStatus');
   const matchingCondition = conditions?.find((condition) => condition?.id === conditionToEdit?.id);
 
-  const getFieldValue = (
-    tableCells: Array<{
-      info: {
-        header: string;
-      };
-      value: string;
-    }>,
-    fieldName,
-  ): string => tableCells?.find((cell) => cell?.info?.header === fieldName)?.value;
-
-  const displayName = getFieldValue(conditionToEdit?.cells, 'display');
-  const editableClinicalStatus = getFieldValue(conditionToEdit?.cells, 'clinicalStatus');
-  const editableAbatementDateTime = getFieldValue(conditionToEdit?.cells, 'abatementDateTime');
+  const displayName = conditionToEdit?.display;
+  const editableClinicalStatus = conditionToEdit?.clinicalStatus;
+  const editableAbatementDateTime = conditionToEdit?.abatementDateTime;
   const [selectedCondition, setSelectedCondition] = useState<CodedCondition>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm);
@@ -101,8 +98,8 @@ const ConditionsWidget: React.FC<ConditionsWidgetProps> = ({
 
     const payload: FormFields = {
       clinicalStatus: getValues('clinicalStatus'),
-      conceptId: selectedCondition?.concept?.uuid,
-      display: selectedCondition?.concept?.display,
+      conceptId: selectedCondition?.uuid,
+      display: selectedCondition?.display,
       abatementDateTime: getValues('abatementDateTime') ? dayjs(getValues('abatementDateTime')).format() : null,
       onsetDateTime: getValues('onsetDateTime') ? dayjs(getValues('onsetDateTime')).format() : null,
       patientId: patientUuid,
@@ -187,7 +184,9 @@ const ConditionsWidget: React.FC<ConditionsWidgetProps> = ({
     searchInputRef?.current?.focus();
   };
 
-  const handleSearchTermChange = (event: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(event.target.value);
+  const handleSearchTermChange = (searchTerm: string) => {
+    setSearchTerm(searchTerm);
+  };
 
   useEffect(() => {
     if (errors?.conditionName) {
@@ -218,24 +217,25 @@ const ConditionsWidget: React.FC<ConditionsWidgetProps> = ({
                   <ResponsiveWrapper>
                     <Search
                       autoFocus
-                      ref={searchInputRef}
-                      size="md"
-                      id="conditionsSearch"
-                      labelText={t('enterCondition', 'Enter condition')}
-                      placeholder={t('searchConditions', 'Search conditions')}
                       className={classNames({
                         [styles.conditionsError]: errors?.conditionName,
                       })}
-                      onChange={(e) => {
-                        onChange(e);
-                        handleSearchTermChange(e);
+                      disabled={isEditing}
+                      id="conditionsSearch"
+                      aria-labelledby={errors?.conditionName ? 'conditionsSearchError' : undefined}
+                      labelText={t('enterCondition', 'Enter condition')}
+                      onChange={(event) => {
+                        const val = event.target.value;
+                        onChange(val);
+                        handleSearchTermChange(val);
                       }}
-                      renderIcon={errors?.conditionName && ((props) => <WarningFilled fill="red" {...props} />)}
                       onClear={() => {
                         setSearchTerm('');
                         setSelectedCondition(null);
                       }}
-                      disabled={isEditing}
+                      placeholder={t('searchConditions', 'Search conditions')}
+                      ref={searchInputRef}
+                      renderIcon={errors?.conditionName && ((props) => <WarningFilled fill="red" {...props} />)}
                       value={(() => {
                         if (selectedCondition) {
                           return selectedCondition.display;
@@ -248,37 +248,19 @@ const ConditionsWidget: React.FC<ConditionsWidgetProps> = ({
                   </ResponsiveWrapper>
                 )}
               />
-              {errors?.conditionName && <p className={styles.errorMessage}>{errors?.conditionName?.message}</p>}
-              {(() => {
-                if (!debouncedSearchTerm || selectedCondition) return null;
-                if (isSearching)
-                  return <InlineLoading className={styles.loader} description={t('searching', 'Searching') + '...'} />;
-                if (searchResults && searchResults.length) {
-                  return (
-                    <ul className={styles.conditionsList}>
-                      {searchResults?.map((searchResult) => (
-                        <li
-                          role="menuitem"
-                          className={styles.condition}
-                          key={searchResult?.concept?.uuid}
-                          onClick={() => handleConditionChange(searchResult)}
-                        >
-                          {searchResult.display}
-                        </li>
-                      ))}
-                    </ul>
-                  );
-                }
-                return (
-                  <Layer>
-                    <Tile className={styles.emptyResults}>
-                      <span>
-                        {t('noResultsFor', 'No results for')} <strong>"{debouncedSearchTerm}"</strong>
-                      </span>
-                    </Tile>
-                  </Layer>
-                );
-              })()}
+              {errors?.conditionName && (
+                <p id="conditionsSearchError" className={styles.errorMessage}>
+                  {errors.conditionName.message}
+                </p>
+              )}
+              <SearchResults
+                isSearching={isSearching}
+                onConditionChange={handleConditionChange}
+                searchResults={searchResults}
+                selectedCondition={selectedCondition}
+                t={t}
+                value={searchTerm}
+              />
             </>
           )}
         </FormGroup>
@@ -286,20 +268,17 @@ const ConditionsWidget: React.FC<ConditionsWidgetProps> = ({
           <Controller
             name="onsetDateTime"
             control={control}
-            render={({ field: { onChange, onBlur, value } }) => (
+            render={({ field, fieldState }) => (
               <ResponsiveWrapper>
-                <DatePicker
+                <OpenmrsDatePicker
+                  {...field}
                   id="onsetDate"
-                  datePickerType="single"
-                  dateFormat="d/m/Y"
-                  maxDate={dayjs().utc().format()}
-                  placeholder="dd/mm/yyyy"
-                  onChange={([date]) => onChange(date)}
-                  onBlur={onBlur}
-                  value={value}
-                >
-                  <DatePickerInput id="onsetDateInput" labelText={t('onsetDate', 'Onset date')} />
-                </DatePicker>
+                  data-testid="onsetDate"
+                  maxDate={new Date()}
+                  labelText={t('onsetDate', 'Onset date')}
+                  invalid={Boolean(fieldState?.error?.message)}
+                  invalidText={fieldState?.error?.message}
+                />
               </ResponsiveWrapper>
             )}
           />
@@ -317,35 +296,37 @@ const ConditionsWidget: React.FC<ConditionsWidgetProps> = ({
                 onChange={onChange}
                 orientation="vertical"
                 valueSelected={value.toLowerCase()}
+                aria-labelledby={errors?.clinicalStatus ? 'clinicalStatusError' : undefined}
               >
                 <RadioButton id="active" labelText={t('active', 'Active')} value="active" />
                 <RadioButton id="inactive" labelText={t('inactive', 'Inactive')} value="inactive" />
               </RadioButtonGroup>
             )}
           />
-          {errors?.clinicalStatus && <p className={styles.errorMessage}>{errors?.clinicalStatus?.message}</p>}
+          {errors?.clinicalStatus && (
+            <p id="clinicalStatusError" className={styles.errorMessage}>
+              {errors.clinicalStatus.message}
+            </p>
+          )}
         </FormGroup>
         {(clinicalStatus.match(/inactive/i) || matchingCondition?.clinicalStatus?.match(/inactive/i)) && (
           <FormGroup legendText="">
             <Controller
               name="abatementDateTime"
               control={control}
-              render={({ field: { onBlur, onChange, value } }) => (
+              render={({ field, fieldState }) => (
                 <>
                   <ResponsiveWrapper>
-                    <DatePicker
+                    <OpenmrsDatePicker
+                      {...field}
                       id="endDate"
-                      datePickerType="single"
-                      dateFormat="d/m/Y"
-                      minDate={new Date(watch('onsetDateTime')).toISOString()}
-                      maxDate={dayjs().utc().format()}
-                      placeholder="dd/mm/yyyy"
-                      onChange={([date]) => onChange(date)}
-                      onBlur={onBlur}
-                      value={value}
-                    >
-                      <DatePickerInput id="abatementDateTime" labelText={t('endDate', 'End date')} />
-                    </DatePicker>
+                      data-testid="endDate"
+                      minDate={new Date(watch('onsetDateTime'))}
+                      maxDate={new Date()}
+                      labelText={t('endDate', 'End date')}
+                      invalid={Boolean(fieldState?.error?.message)}
+                      invalidText={fieldState?.error?.message}
+                    />
                   </ResponsiveWrapper>
                 </>
               )}
@@ -365,6 +346,50 @@ function RequiredFieldLabel({ label, t }: RequiredFieldLabelProps) {
         *
       </span>
     </span>
+  );
+}
+
+function SearchResults({
+  isSearching,
+  onConditionChange,
+  searchResults,
+  selectedCondition,
+  t,
+  value,
+}: SearchResultsProps) {
+  if (!value || selectedCondition) {
+    return null;
+  }
+
+  if (isSearching) {
+    return <InlineLoading className={styles.loader} description={t('searching', 'Searching') + '...'} />;
+  }
+
+  if (!isSearching && searchResults?.length > 0) {
+    return (
+      <ul className={styles.conditionsList}>
+        {searchResults?.map((searchResult) => (
+          <li
+            className={styles.condition}
+            key={searchResult?.uuid}
+            onClick={() => onConditionChange(searchResult)}
+            role="menuitem"
+          >
+            {searchResult.display}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return (
+    <Layer>
+      <Tile className={styles.emptyResults}>
+        <span>
+          {t('noResultsFor', 'No results for')} <strong>"{value}"</strong>
+        </span>
+      </Tile>
+    </Layer>
   );
 }
 

@@ -53,15 +53,19 @@ export const vitalsAndBiometricsDashboardLink =
   getSyncLifecycle(
     createDashboardLink({
       ...dashboardMeta,
-      moduleName,
     }),
     options,
   );
 
-export const weightTile = getAsyncLifecycle(() => import('./weight-tile/weight-tile.component'), options);
+export const weightTile = getAsyncLifecycle(() => import('./components/weight-tile/weight-tile.component'), options);
 
 // t('recordVitalsAndBiometrics', 'Record Vitals and Biometrics')
 export const vitalsBiometricsFormWorkspace = getAsyncLifecycle(
   () => import('./vitals-biometrics-form/vitals-biometrics-form.workspace'),
+  options,
+);
+
+export const vitalsAndBiometricsDeleteConfirmationModal = getAsyncLifecycle(
+  () => import('./components/delete-vitals-biometrics-modal/delete-vitals-biometrics.modal'),
   options,
 );

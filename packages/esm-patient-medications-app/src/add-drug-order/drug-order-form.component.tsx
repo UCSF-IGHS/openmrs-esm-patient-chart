@@ -1,5 +1,5 @@
 import React, { type ChangeEvent, type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { type TFunction, useTranslation } from 'react-i18next';
+import { useTranslation } from 'react-i18next';
 import classNames from 'classnames';
 import {
   Button,
@@ -7,8 +7,6 @@ import {
   Checkbox,
   Column,
   ComboBox,
-  DatePicker,
-  DatePickerInput,
   IconButton,
   Form,
   FormGroup,
@@ -30,13 +28,14 @@ import {
   ExtensionSlot,
   formatDate,
   getPatientName,
+  OpenmrsDatePicker,
   parseDate,
   useConfig,
   useLayoutType,
-  usePatient,
 } from '@openmrs/esm-framework';
 import { type Control, Controller, useController, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { usePatientChartStore } from '@openmrs/esm-patient-common-lib';
 import { z } from 'zod';
 import { useOrderConfig } from '../api/order-config';
 import { type ConfigObject } from '../config-schema';
@@ -51,7 +50,6 @@ import type {
 } from '../types';
 import { useRequireOutpatientQuantity } from '../api';
 import styles from './drug-order-form.scss';
-import { usePatientChartStore } from '@openmrs/esm-patient-common-lib';
 
 export interface DrugOrderFormProps {
   initialOrderBasketItem: DrugOrderBasketItem;
@@ -60,115 +58,125 @@ export interface DrugOrderFormProps {
   promptBeforeClosing: (testFcn: () => boolean) => void;
 }
 
-const createMedicationOrderFormSchema = (requireOutpatientQuantity: boolean, t: TFunction) => {
-  const comboSchema = {
-    default: z.boolean().optional(),
-    value: z.string(),
-    valueCoded: z.string(),
-  };
+function useCreateMedicationOrderFormSchema() {
+  const { t } = useTranslation();
+  const { requireOutpatientQuantity } = useRequireOutpatientQuantity();
+  const { requireIndication } = useConfig<ConfigObject>();
 
-  const baseSchemaFields = {
-    freeTextDosage: z.string().refine((value) => !!value, {
-      message: t('freeDosageErrorMessage', 'Add free dosage note'),
-    }),
-    dosage: z.number({
-      invalid_type_error: t('dosageRequiredErrorMessage', 'Dosage is required'),
-    }),
-    unit: z.object(
-      { ...comboSchema },
-      {
-        invalid_type_error: t('selectUnitErrorMessage', 'Dose unit is required'),
-      },
-    ),
-    route: z.object(
-      { ...comboSchema },
-      {
-        invalid_type_error: t('selectRouteErrorMessage', 'Route is required'),
-      },
-    ),
-    patientInstructions: z.string().nullable(),
-    asNeeded: z.boolean(),
-    asNeededCondition: z.string().nullable(),
-    duration: z.number().nullable(),
-    durationUnit: z.object({ ...comboSchema }).nullable(),
-    indication: z.string().refine((value) => value !== '', {
-      message: t('indicationErrorMessage', 'Indication is required'),
-    }),
-    startDate: z.date(),
-    frequency: z.object(
-      { ...comboSchema },
-      {
-        invalid_type_error: t('selectFrequencyErrorMessage', 'Frequency is required'),
-      },
-    ),
-  };
+  const schema = useMemo(() => {
+    const comboSchema = {
+      default: z.boolean().optional(),
+      value: z.string(),
+      valueCoded: z.string(),
+    };
 
-  const outpatientDrugOrderFields = {
-    pillsDispensed: z
-      .number()
-      .nullable()
-      .refine(
-        (value) => {
-          if (requireOutpatientQuantity && (typeof value !== 'number' || value < 1)) {
-            return false;
-          }
-          return true;
-        },
+    const baseSchemaFields = {
+      freeTextDosage: z.string().refine((value) => !!value, {
+        message: t('freeDosageErrorMessage', 'Add free dosage note'),
+      }),
+      dosage: z.number({
+        invalid_type_error: t('dosageRequiredErrorMessage', 'Dosage is required'),
+      }),
+      unit: z.object(
+        { ...comboSchema },
         {
-          message: t('pillDispensedErrorMessage', 'Quantity to dispense is required'),
+          invalid_type_error: t('selectUnitErrorMessage', 'Dose unit is required'),
         },
       ),
-    quantityUnits: z
-      .object(comboSchema)
-      .nullable()
-      .refine(
-        (value) => {
-          if (requireOutpatientQuantity && !value) {
-            return false;
-          }
-          return true;
-        },
+      route: z.object(
+        { ...comboSchema },
         {
-          message: t('selectQuantityUnitsErrorMessage', 'Quantity unit is required'),
+          invalid_type_error: t('selectRouteErrorMessage', 'Route is required'),
         },
       ),
-    numRefills: z
-      .number()
-      .nullable()
-      .refine(
-        (value) => {
-          if (requireOutpatientQuantity && (typeof value !== 'number' || value < 0)) {
-            return false;
-          }
-          return true;
-        },
+      patientInstructions: z.string().nullable(),
+      asNeeded: z.boolean(),
+      asNeededCondition: z.string().nullable(),
+      duration: z.number().nullable(),
+      durationUnit: z.object({ ...comboSchema }).nullable(),
+      indication: requireIndication
+        ? z.string().refine((value) => value !== '', {
+            message: t('indicationErrorMessage', 'Indication is required'),
+          })
+        : z.string().nullish(),
+      startDate: z.date(),
+      frequency: z.object(
+        { ...comboSchema },
         {
-          message: t('numRefillsErrorMessage', 'Number of refills is required'),
+          invalid_type_error: t('selectFrequencyErrorMessage', 'Frequency is required'),
         },
       ),
-  };
+    };
 
-  const nonFreeTextDosageSchema = z.object({
-    ...baseSchemaFields,
-    ...outpatientDrugOrderFields,
-    isFreeTextDosage: z.literal(false),
-    freeTextDosage: z.string().optional(),
-  });
+    const outpatientDrugOrderFields = {
+      pillsDispensed: z
+        .number()
+        .nullable()
+        .refine(
+          (value) => {
+            if (requireOutpatientQuantity && (typeof value !== 'number' || value < 1)) {
+              return false;
+            }
+            return true;
+          },
+          {
+            message: t('pillDispensedErrorMessage', 'Quantity to dispense is required'),
+          },
+        ),
+      quantityUnits: z
+        .object(comboSchema)
+        .nullable()
+        .refine(
+          (value) => {
+            if (requireOutpatientQuantity && !value) {
+              return false;
+            }
+            return true;
+          },
+          {
+            message: t('selectQuantityUnitsErrorMessage', 'Quantity unit is required'),
+          },
+        ),
+      numRefills: z
+        .number()
+        .nullable()
+        .refine(
+          (value) => {
+            if (requireOutpatientQuantity && (typeof value !== 'number' || value < 0)) {
+              return false;
+            }
+            return true;
+          },
+          {
+            message: t('numRefillsErrorMessage', 'Number of refills is required'),
+          },
+        ),
+    };
 
-  const freeTextDosageSchema = z.object({
-    ...baseSchemaFields,
-    ...outpatientDrugOrderFields,
-    isFreeTextDosage: z.literal(true),
-    dosage: z.number().nullable(),
-    unit: z.object(comboSchema).nullable(),
-    route: z.object(comboSchema).nullable(),
-    frequency: z.object(comboSchema).nullable(),
-  });
+    const nonFreeTextDosageSchema = z.object({
+      ...baseSchemaFields,
+      ...outpatientDrugOrderFields,
+      isFreeTextDosage: z.literal(false),
+      freeTextDosage: z.string().optional(),
+    });
 
-  return z.discriminatedUnion('isFreeTextDosage', [nonFreeTextDosageSchema, freeTextDosageSchema]);
-};
+    const freeTextDosageSchema = z.object({
+      ...baseSchemaFields,
+      ...outpatientDrugOrderFields,
+      isFreeTextDosage: z.literal(true),
+      dosage: z.number().nullable(),
+      unit: z.object(comboSchema).nullable(),
+      route: z.object(comboSchema).nullable(),
+      frequency: z.object(comboSchema).nullable(),
+    });
 
-type MedicationOrderFormData = z.infer<ReturnType<typeof createMedicationOrderFormSchema>>;
+    return z.discriminatedUnion('isFreeTextDosage', [nonFreeTextDosageSchema, freeTextDosageSchema]);
+  }, [requireIndication, requireOutpatientQuantity, t]);
+
+  return schema;
+}
+
+type MedicationOrderFormData = z.infer<ReturnType<typeof useCreateMedicationOrderFormSchema>>;
 
 function MedicationInfoHeader({
   orderBasketItem,
@@ -221,7 +229,6 @@ export function DrugOrderForm({ initialOrderBasketItem, onSave, onCancel, prompt
   const config = useConfig<ConfigObject>();
   const isTablet = useLayoutType() === 'tablet';
   const { orderConfigObject, error: errorFetchingOrderConfig } = useOrderConfig();
-  const { requireOutpatientQuantity } = useRequireOutpatientQuantity();
 
   const defaultStartDate = useMemo(() => {
     if (typeof initialOrderBasketItem?.startDate === 'string') parseDate(initialOrderBasketItem?.startDate);
@@ -229,10 +236,7 @@ export function DrugOrderForm({ initialOrderBasketItem, onSave, onCancel, prompt
     return initialOrderBasketItem?.startDate as Date;
   }, [initialOrderBasketItem?.startDate]);
 
-  const medicationOrderFormSchema = useMemo(
-    () => createMedicationOrderFormSchema(requireOutpatientQuantity, t),
-    [requireOutpatientQuantity, t],
-  );
+  const medicationOrderFormSchema = useCreateMedicationOrderFormSchema();
 
   const {
     control,
@@ -355,15 +359,17 @@ export function DrugOrderForm({ initialOrderBasketItem, onSave, onCancel, prompt
   }, []);
 
   const [showStickyMedicationHeader, setShowMedicationHeader] = useState(false);
-  const { patientUuid } = usePatientChartStore();
-  const { patient, isLoading: isLoadingPatientDetails } = usePatient(patientUuid);
+  const { patient } = usePatientChartStore();
   const patientName = patient ? getPatientName(patient) : '';
   const { maxDispenseDurationInDays } = useConfig<ConfigObject>();
 
   const observer = useRef(null);
   const medicationInfoHeaderRef = useCallback(
-    (node) => {
-      if (observer.current) observer.current.disconnect();
+    (node: HTMLElement) => {
+      if (observer.current) {
+        observer.current.disconnect();
+      }
+
       observer.current = new IntersectionObserver(
         ([e]) => {
           setShowMedicationHeader(e.intersectionRatio < 1);
@@ -372,7 +378,10 @@ export function DrugOrderForm({ initialOrderBasketItem, onSave, onCancel, prompt
           threshold: 1,
         },
       );
-      if (node) observer.current.observe(node);
+
+      if (node) {
+        observer.current.observe(node);
+      }
     },
     [setShowMedicationHeader],
   );
@@ -389,7 +398,7 @@ export function DrugOrderForm({ initialOrderBasketItem, onSave, onCancel, prompt
           />
         </div>
       )}
-      {isTablet && !isLoadingPatientDetails && (
+      {isTablet && (
         <div className={styles.patientHeader}>
           <span className={styles.bodyShort02}>{patientName}</span>
           <span className={classNames(styles.text02, styles.bodyShort01)}>
@@ -405,7 +414,7 @@ export function DrugOrderForm({ initialOrderBasketItem, onSave, onCancel, prompt
               kind="error"
               lowContrast
               className={styles.inlineNotification}
-              title={t('errorFetchingOrderConfig', 'Error occured when fetching Order config')}
+              title={t('errorFetchingOrderConfig', 'Error occurred when fetching Order config')}
               subtitle={t('tryReopeningTheForm', 'Please try launching the form again')}
             />
           )}
@@ -501,7 +510,7 @@ export function DrugOrderForm({ initialOrderBasketItem, onSave, onCancel, prompt
                   </Column>
                 </Grid>
                 <Grid className={styles.gridRow}>
-                  <Column lg={8} md={4} sm={4}>
+                  <Column lg={16} md={4} sm={4}>
                     <InputWrapper>
                       <ControlledFieldInput
                         control={control}
@@ -516,7 +525,7 @@ export function DrugOrderForm({ initialOrderBasketItem, onSave, onCancel, prompt
                       />
                     </InputWrapper>
                   </Column>
-                  <Column lg={8} md={4} sm={4}>
+                  <Column lg={16} md={4} sm={4}>
                     <InputWrapper>
                       <ControlledFieldInput
                         control={control}
@@ -596,22 +605,16 @@ export function DrugOrderForm({ initialOrderBasketItem, onSave, onCancel, prompt
                     <Controller
                       name="startDate"
                       control={control}
-                      render={({ field: { onBlur, value, onChange, ref } }) => (
-                        <DatePicker
-                          datePickerType="single"
-                          maxDate={new Date().toISOString()}
-                          value={value}
-                          onChange={([newStartDate]) => onChange(newStartDate)}
-                          onBlur={onBlur}
-                          ref={ref}
-                        >
-                          <DatePickerInput
-                            id="startDatePicker"
-                            placeholder="dd/mm/yyyy"
-                            labelText={t('startDate', 'Start date')}
-                            size={isTablet ? 'lg' : 'sm'}
-                          />
-                        </DatePicker>
+                      render={({ field, fieldState }) => (
+                        <OpenmrsDatePicker
+                          {...field}
+                          maxDate={new Date()}
+                          id="startDatePicker"
+                          labelText={t('startDate', 'Start date')}
+                          size={isTablet ? 'lg' : 'sm'}
+                          invalid={Boolean(fieldState?.error?.message)}
+                          invalidText={fieldState?.error?.message}
+                        />
                       )}
                     />
                   </InputWrapper>
@@ -755,19 +758,28 @@ export function DrugOrderForm({ initialOrderBasketItem, onSave, onCancel, prompt
   );
 }
 
-const CustomNumberInput = ({ setValue, control, name, labelText, isTablet, ...inputProps }) => {
+interface CustomNumberInputProps {
+  setValue: (name: keyof MedicationOrderFormData, value: number) => void;
+  control: Control<MedicationOrderFormData>;
+  name: keyof MedicationOrderFormData;
+  labelText: string;
+  isTablet: boolean;
+  inputProps?: Partial<ComponentProps<typeof TextInput>>;
+}
+
+const CustomNumberInput = ({ setValue, control, name, labelText, isTablet, ...inputProps }: CustomNumberInputProps) => {
   const { t } = useTranslation();
   const { maxDispenseDurationInDays } = useConfig();
-  const responsiveSize = isTablet ? 'lg' : 'sm';
+  const responsiveSize = isTablet ? 'md' : 'sm';
 
   const {
     field: { onBlur, onChange, value, ref },
-  } = useController<MedicationOrderFormData>({ name: name, control });
+  } = useController<MedicationOrderFormData>({ name, control });
 
   const handleChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.value.replace(/[^\d]/g, '').slice(0, 2);
-      onChange(val ? parseInt(val) : 0);
+      const number = parseFloat(String(e.target.value));
+      onChange(isNaN(number) ? null : number);
     },
     [onChange],
   );
@@ -792,42 +804,44 @@ const CustomNumberInput = ({ setValue, control, name, labelText, isTablet, ...in
           className={styles.customInput}
           onBlur={onBlur}
           ref={ref}
-          value={!!value ? value : '--'}
+          value={typeof value === 'string' || typeof value === 'number' ? value : '--'}
           size={responsiveSize}
+          id={name}
+          labelText=""
           {...inputProps}
         />
         <IconButton onClick={increment} label={t('increment', 'Increment')} size={responsiveSize}>
           <AddIcon size={16} />
         </IconButton>
-      </div>{' '}
+      </div>
     </div>
   );
 };
 
-type MedicationOrderFormValue = MedicationOrderFormData[keyof MedicationOrderFormData];
-
 interface BaseControlledFieldInputProps {
-  name: keyof MedicationOrderFormData;
-  type: 'toggle' | 'checkbox' | 'number' | 'textArea' | 'textInput' | 'comboBox';
-  handleAfterChange?: (newValue: MedicationOrderFormValue, prevValue: MedicationOrderFormValue) => void;
   control: Control<MedicationOrderFormData>;
-  getValues?: (name: keyof MedicationOrderFormData) => MedicationOrderFormValue;
+  name: keyof MedicationOrderFormData;
+  type: 'number' | 'toggle' | 'checkbox' | 'textArea' | 'textInput' | 'comboBox';
+  getValues?: (name: keyof MedicationOrderFormData) => any;
+  handleAfterChange?: (newValue: any, prevValue: any) => void;
 }
 
-type ControlledFieldInputProps = Omit<BaseControlledFieldInputProps, 'type'> &
+type ControlledFieldInputProps = BaseControlledFieldInputProps &
   (
-    | ({ type: 'toggle' } & ComponentProps<typeof Toggle>)
-    | ({ type: 'checkbox' } & ComponentProps<typeof Checkbox>)
-    | ({ type: 'number' } & ComponentProps<typeof NumberInput>)
-    | ({ type: 'textArea' } & ComponentProps<typeof TextArea>)
-    | ({ type: 'textInput' } & ComponentProps<typeof TextInput>)
-    | ({ type: 'comboBox' } & ComponentProps<typeof ComboBox>)
+    | ({ type: 'number' } & Omit<ComponentProps<typeof NumberInput>, 'onChange' | 'onBlur' | 'value' | 'ref'>)
+    | ({ type: 'toggle' } & Omit<ComponentProps<typeof Toggle>, 'onChange' | 'onBlur' | 'toggled' | 'ref'>)
+    | ({ type: 'checkbox' } & Omit<ComponentProps<typeof Checkbox>, 'onChange' | 'onBlur' | 'checked' | 'ref'> & {
+          labelText: string;
+        })
+    | ({ type: 'textArea' } & Omit<ComponentProps<typeof TextArea>, 'onChange' | 'onBlur' | 'value' | 'ref'>)
+    | ({ type: 'textInput' } & Omit<ComponentProps<typeof TextInput>, 'onChange' | 'onBlur' | 'value' | 'ref'>)
+    | ({ type: 'comboBox' } & Omit<ComponentProps<typeof ComboBox>, 'onChange' | 'onBlur' | 'selectedItem' | 'ref'>)
   );
 
 const ControlledFieldInput = ({
+  control,
   name,
   type,
-  control,
   getValues,
   handleAfterChange,
   ...restProps
@@ -835,16 +849,16 @@ const ControlledFieldInput = ({
   const {
     field: { onBlur, onChange, value, ref },
     fieldState: { error },
-  } = useController<MedicationOrderFormData>({ name: name, control });
+  } = useController<MedicationOrderFormData>({ name, control });
   const isTablet = useLayoutType() === 'tablet';
-  const responsiveSize = isTablet ? 'lg' : 'sm';
+  const responsiveSize = isTablet ? 'md' : 'sm';
 
   const fieldErrorStyles = classNames({
     [styles.fieldError]: error?.message,
   });
 
   const handleChange = useCallback(
-    (newValue: MedicationOrderFormValue) => {
+    (newValue: any) => {
       const prevValue = getValues?.(name);
       onChange(newValue);
       handleAfterChange?.(newValue, prevValue);
@@ -855,76 +869,95 @@ const ControlledFieldInput = ({
   const component = useMemo(() => {
     if (type === 'toggle') {
       return (
-        <Toggle toggled={value} onToggle={(value: MedicationOrderFormValue) => handleChange(value)} {...restProps} />
+        <Toggle
+          toggled={Boolean(value)}
+          onToggle={handleChange}
+          ref={ref}
+          // @ts-ignore
+          size={isTablet ? 'md' : 'sm'}
+          {...restProps}
+        />
       );
     }
 
     if (type === 'checkbox') {
-      return <Checkbox checked={value} onChange={(e, { checked }) => handleChange(checked)} {...restProps} />;
+      const checkboxProps = restProps as ComponentProps<typeof Checkbox>;
+      return (
+        <Checkbox
+          checked={Boolean(value)}
+          labelText={checkboxProps.labelText}
+          onChange={(_, { checked }) => handleChange(checked)}
+          ref={ref}
+          {...checkboxProps}
+        />
+      );
     }
 
     if (type === 'number') {
+      const numberInputProps = restProps as ComponentProps<typeof NumberInput>;
       return (
         <NumberInput
           className={fieldErrorStyles}
           disableWheel
           onBlur={onBlur}
-          onChange={(e, { value }) => {
-            const number = parseFloat(value);
+          onChange={(_, { value }) => {
+            const number = parseFloat(String(value));
             handleChange(isNaN(number) ? null : number);
           }}
           ref={ref}
-          size={responsiveSize}
-          value={!!value ? value : 0}
-          {...restProps}
+          size={isTablet ? 'md' : 'sm'}
+          value={typeof value === 'number' ? value : undefined}
+          {...numberInputProps}
         />
       );
     }
 
     if (type === 'textArea') {
+      const textAreaProps = restProps as ComponentProps<typeof TextArea>;
       return (
         <TextArea
           className={fieldErrorStyles}
           onBlur={onBlur}
-          onChange={(e: ChangeEvent<HTMLTextAreaElement>) => handleChange(e.target.value)}
+          onChange={(e) => handleChange(e.target.value)}
           ref={ref}
-          size={responsiveSize}
-          value={value}
-          {...restProps}
+          value={typeof value === 'string' ? value : ''}
+          {...textAreaProps}
         />
       );
     }
 
     if (type === 'textInput') {
+      const textInputProps = restProps as ComponentProps<typeof TextInput>;
       return (
         <TextInput
           className={fieldErrorStyles}
-          onChange={(e: ChangeEvent<HTMLInputElement>) => handleChange(e.target.value)}
+          onChange={(e) => handleChange(e.target.value)}
           onBlur={onBlur}
           ref={ref}
-          size={responsiveSize}
-          value={value}
-          {...restProps}
+          size={isTablet ? 'md' : 'sm'}
+          value={typeof value === 'string' ? value : ''}
+          {...textInputProps}
         />
       );
     }
 
     if (type === 'comboBox') {
+      const comboBoxProps = restProps as ComponentProps<typeof ComboBox>;
       return (
         <ComboBox
           className={fieldErrorStyles}
           onBlur={onBlur}
           onChange={({ selectedItem }) => handleChange(selectedItem)}
           ref={ref}
-          size={responsiveSize}
+          size={isTablet ? 'md' : 'sm'}
           selectedItem={value}
-          {...restProps}
+          {...comboBoxProps}
         />
       );
     }
 
     return null;
-  }, [type, value, restProps, handleChange, fieldErrorStyles, onBlur, ref, responsiveSize]);
+  }, [type, value, restProps, handleChange, fieldErrorStyles, onBlur, ref, isTablet]);
 
   return (
     <>

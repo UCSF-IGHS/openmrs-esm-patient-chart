@@ -1,6 +1,6 @@
 @use '@carbon/layout';
 @use '@carbon/type';
-@use '@openmrs/esm-styleguide/src/_vars' as *;
+@use '@openmrs/esm-styleguide/src/vars' as *;
 
 .stickerContainer {
   padding: layout.$spacing-03 layout.$spacing-05;
@@ -79,5 +79,10 @@
     margin: 0 !important;
     padding: 0 !important;
     overflow: hidden;
+  }
+
+  .stickerContainer {
+    transform: scale(var(--print-scale));
+    transform-origin: left top;
   }
 }

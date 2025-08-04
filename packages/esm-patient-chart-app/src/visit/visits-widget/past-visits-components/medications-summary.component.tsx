@@ -1,5 +1,5 @@
 import React from 'react';
-import capitalize from 'lodash-es/capitalize';
+import { capitalize } from 'lodash-es';
 import { useTranslation } from 'react-i18next';
 import { EmptyState } from '@openmrs/esm-patient-common-lib';
 import { formatDate, formatTime, parseDate } from '@openmrs/esm-framework';
@@ -71,9 +71,10 @@ const MedicationSummary: React.FC<MedicationSummaryProps> = ({ medications }) =>
                         {medication?.order?.orderReasonNonCoded}
                       </span>
                     ) : null}
+                    {medication?.order?.orderReasonNonCoded && medication?.order?.quantity && <>&mdash;</>}
                     {medication?.order?.quantity ? (
                       <span>
-                        <span className={styles.label01}> &mdash; {t('quantity', 'Quantity').toUpperCase()}</span>{' '}
+                        <span className={styles.label01}> {t('quantity', 'Quantity').toUpperCase()}</span>{' '}
                         {medication?.order?.quantity}
                       </span>
                     ) : null}

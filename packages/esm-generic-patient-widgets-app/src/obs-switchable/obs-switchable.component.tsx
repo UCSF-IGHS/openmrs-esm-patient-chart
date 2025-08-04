@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { DataTableSkeleton, Button, InlineLoading } from '@carbon/react';
+import { Button, DataTableSkeleton, InlineLoading } from '@carbon/react';
 import { ChartLineSmooth, Table } from '@carbon/react/icons';
 import { CardHeader, EmptyState, ErrorState } from '@openmrs/esm-patient-common-lib';
 import { useConfig } from '@openmrs/esm-framework';
@@ -16,7 +16,7 @@ interface ObsSwitchableProps {
 
 const ObsSwitchable: React.FC<ObsSwitchableProps> = ({ patientUuid }) => {
   const { t } = useTranslation();
-  const config = useConfig() as ConfigObject;
+  const config = useConfig<ConfigObject>();
   const [chartView, setChartView] = React.useState<boolean>(config.showGraphByDefault);
 
   const { data: obss, error, isLoading, isValidating } = useObs(patientUuid);
@@ -31,7 +31,7 @@ const ObsSwitchable: React.FC<ObsSwitchableProps> = ({ patientUuid }) => {
         if (obss?.length) {
           return (
             <div className={styles.widgetContainer}>
-              <CardHeader title={config.title}>
+              <CardHeader title={t(config.title)}>
                 <div className={styles.backgroundDataFetchingIndicator}>
                   <span>{isValidating ? <InlineLoading /> : null}</span>
                 </div>

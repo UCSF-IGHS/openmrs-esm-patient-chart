@@ -3,18 +3,18 @@ import classNames from 'classnames';
 import { useTranslation } from 'react-i18next';
 import { Button, ButtonSkeleton, SkeletonText, Tile } from '@carbon/react';
 import { ShoppingCartArrowUp } from '@carbon/react/icons';
-import { launchPatientWorkspace, useOrderBasket, usePatientChartStore } from '@openmrs/esm-patient-common-lib';
+import { useOrderBasket, usePatientChartStore } from '@openmrs/esm-patient-common-lib';
 import {
   ArrowRightIcon,
   closeWorkspace,
   ShoppingCartArrowDownIcon,
   useConfig,
   useLayoutType,
-  usePatient,
   UserHasAccess,
+  launchWorkspace,
 } from '@openmrs/esm-framework';
 import { type ConfigObject } from '../../config-schema';
-import { prepMedicationOrderPostData, usePatientOrders } from '../../api/api';
+import { prepMedicationOrderPostData, useActivePatientOrders } from '../../api/api';
 import { ordersEqual } from './helpers';
 import {
   type DrugSearchResult,
@@ -115,23 +115,19 @@ const DrugSearchResultItem: React.FC<DrugSearchResultItemProps> = ({ drug, openO
   const isTablet = useLayoutType() === 'tablet';
   const { orders, setOrders } = useOrderBasket<DrugOrderBasketItem>('medications', prepMedicationOrderPostData);
   const { patientUuid } = usePatientChartStore();
-  const { data: activeOrders, isLoading: isLoadingActiveOrders } = usePatientOrders(patientUuid);
+  const { data: activeOrders, isLoading: isLoadingActiveOrders } = useActivePatientOrders(patientUuid);
   const drugAlreadyInBasket = useMemo(
     () => orders?.some((order) => ordersEqual(order, getTemplateOrderBasketItem(drug))),
     [orders, drug],
   );
   const drugAlreadyPrescribed = useMemo(
-    () => activeOrders?.some((order) => order.drug.uuid == drug.uuid),
+    () => activeOrders?.some((order) => order?.drug?.uuid === drug?.uuid),
     [activeOrders, drug],
   );
 
-  const {
-    templates,
-    isLoading: isLoadingTemplates,
-    error: fetchingDrugOrderTemplatesError,
-  } = useDrugTemplate(drug?.uuid);
+  const { templates, error: fetchingDrugOrderTemplatesError } = useDrugTemplate(drug?.uuid);
   const { t } = useTranslation();
-  const config = useConfig() as ConfigObject;
+  const config = useConfig<ConfigObject>();
   const drugItemTemplateOptions: Array<DrugOrderBasketItem> = useMemo(
     () =>
       templates?.length
@@ -147,7 +143,7 @@ const DrugSearchResultItem: React.FC<DrugSearchResultItemProps> = ({ drug, openO
       setOrders([...orders, searchResult]);
       closeWorkspace('add-drug-order', {
         ignoreChanges: true,
-        onWorkspaceClose: () => launchPatientWorkspace('order-basket'),
+        onWorkspaceClose: () => launchWorkspace('order-basket'),
       });
     },
     [orders, setOrders],

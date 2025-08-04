@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, type ChangeEvent } from 'react';
 import classNames from 'classnames';
 import { useTranslation } from 'react-i18next';
 import { useFormContext, Controller } from 'react-hook-form';
@@ -30,8 +30,8 @@ const BaseVisitType: React.FC<BaseVisitTypeProps> = ({ visitTypes }) => {
   const { results, currentPage, goTo } = usePagination(searchResults, 5);
   const hasNoMatchingSearchResults = debouncedSearchTerm.trim() !== '' && searchResults.length === 0;
 
-  const handleSearchTermChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(event.target.value);
+  const handleSearchTermChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
   }, []);
 
   return (
@@ -67,7 +67,7 @@ const BaseVisitType: React.FC<BaseVisitTypeProps> = ({ visitTypes }) => {
             <Controller
               name="visitType"
               control={control}
-              defaultValue={results?.length === 1 ? results[0].uuid : ''}
+              defaultValue={results?.length === 1 ? results[0].uuid : null}
               render={({ field: { onChange, value } }) => (
                 <RadioButtonGroup
                   className={styles.radioButtonGroup}

@@ -1,20 +1,19 @@
 import { useCallback } from 'react';
-import { type DefaultWorkspaceProps, launchWorkspace, navigateAndLaunchWorkspace } from '@openmrs/esm-framework';
-import { getPatientUuidFromStore, usePatientChartStore } from './store/patient-chart-store';
+import {
+  type DefaultWorkspaceProps,
+  launchWorkspace,
+  navigateAndLaunchWorkspace,
+  showModal,
+  useFeatureFlag,
+} from '@openmrs/esm-framework';
 import { launchStartVisitPrompt } from './launchStartVisitPrompt';
+import { usePatientChartStore } from './store/patient-chart-store';
 import { useSystemVisitSetting } from './useSystemVisitSetting';
 import { useVisitOrOfflineVisit } from './offline/visit';
 
 export interface DefaultPatientWorkspaceProps extends DefaultWorkspaceProps {
+  patient: fhir.Patient;
   patientUuid: string;
-}
-
-export function launchPatientWorkspace(workspaceName: string, additionalProps?: object) {
-  const patientUuid = getPatientUuidFromStore();
-  launchWorkspace(workspaceName, {
-    patientUuid: patientUuid,
-    ...additionalProps,
-  });
 }
 
 export function launchPatientChartWithWorkspaceOpen({
@@ -40,16 +39,26 @@ export function useLaunchWorkspaceRequiringVisit<T extends object>(workspaceName
   const { patientUuid } = usePatientChartStore();
   const { systemVisitEnabled } = useSystemVisitSetting();
   const { currentVisit } = useVisitOrOfflineVisit(patientUuid);
+  const isRdeEnabled = useFeatureFlag('rde');
 
   const launchPatientWorkspaceCb = useCallback(
     (additionalProps?: T) => {
       if (!systemVisitEnabled || currentVisit) {
-        launchPatientWorkspace(workspaceName, additionalProps);
+        launchWorkspace(workspaceName, additionalProps);
       } else {
-        launchStartVisitPrompt();
+        if (isRdeEnabled) {
+          const dispose = showModal('visit-context-switcher', {
+            patientUuid,
+            closeModal: () => dispose(),
+            onAfterVisitSelected: () => launchWorkspace(workspaceName, additionalProps),
+            size: 'sm',
+          });
+        } else {
+          launchStartVisitPrompt();
+        }
       }
     },
-    [currentVisit, systemVisitEnabled, workspaceName],
+    [currentVisit, systemVisitEnabled, workspaceName, isRdeEnabled, patientUuid],
   );
   return launchPatientWorkspaceCb;
 }

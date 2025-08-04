@@ -1,5 +1,15 @@
 {
   "$schema": "https://json.openmrs.org/routes.schema.json",
+  "optionalBackendDependencies": {
+    "emrapi": {
+      "version": "^2.0.0",
+      "feature": {
+        "flagName": "emrapi-module",
+        "label": "EMR API Module",
+        "description": "This module, if installed, provides core EMR business logic."
+      }
+    }
+  },
   "extensions": [
     {
       "name": "charts-summary-dashboard",
@@ -14,9 +24,21 @@
       "offline": true
     },
     {
+      "name": "encounter-list",
+      "component": "encounterListTableTabs",
+      "online": true,
+      "offline": true
+    },
+    {
       "name": "start-visit-button",
       "component": "startVisitActionButton",
       "slot": "patient-actions-slot",
+      "online": true,
+      "offline": true
+    },
+    {
+      "name": "clinical-views-summary",
+      "component": "clinicalViewsSummary",
       "online": true,
       "offline": true
     },
@@ -42,16 +64,16 @@
       "offline": true
     },
     {
-      "name": "cancel-visit-button",
+      "name": "delete-visit-button",
       "slot": "patient-actions-slot",
-      "component": "cancelVisitActionButton",
+      "component": "deleteVisitActionMenuButton",
       "online": true,
       "offline": true
     },
     {
-      "name": "cancel-visit-button",
+      "name": "delete-visit-button",
       "slot": "patient-search-actions-slot",
-      "component": "cancelVisitPatientSearchActionButton",
+      "component": "deleteVisitActionMenuButton",
       "online": true,
       "offline": true
     },
@@ -63,28 +85,13 @@
       "offline": true
     },
     {
-      "name": "add-past-visit-button",
-      "slot": "patient-actions-slot",
-      "component": "addPastVisitActionButton",
-      "featureFlag": "rde",
-      "online": true,
-      "offline": true
-    },
-    {
-      "name": "add-past-visit-button",
-      "slot": "patient-search-actions-slot",
-      "component": "addPastVisitPatientSearchActionButton",
-      "featureFlag": "rde",
-      "online": true,
-      "offline": true
-    },
-    {
       "name": "encounters-summary-dashboard",
       "slot": "patient-chart-dashboard-slot",
       "component": "encountersSummaryDashboardLink",
       "meta": {
         "slot": "patient-chart-encounters-dashboard-slot",
-        "path": "Visits"
+        "path": "Visits",
+        "layoutMode": "anchored"
       },
       "order": 5,
       "online": true,
@@ -103,39 +110,10 @@
       "offline": true
     },
     {
-      "name": "past-visits-overview",
-      "component": "pastVisitsOverview",
-      "meta": {
-        "title": "Edit or load a past visit",
-        "view": "visits"
-      }
-    },
-    {
-      "name": "start-visit-workspace-form",
-      "component": "startVisitForm",
-      "meta": {
-        "title": "Start a visit"
-      },
-      "online": true,
-      "offline": true
-    },
-    {
       "name": "patient-details-tile",
       "slot": "visit-form-header-slot",
       "component": "patientDetailsTile",
       "order": 1,
-      "online": true,
-      "offline": true
-    },
-    {
-      "name": "nav-group",
-      "component": "genericNavGroup",
-      "online": true,
-      "offline": true
-    },
-    {
-      "name": "dashboard",
-      "component": "genericDashboard",
       "online": true,
       "offline": true
     },
@@ -185,13 +163,26 @@
       "online": true,
       "offline": true,
       "order": 1
+    },
+    {
+      "name": "visit-context-header",
+      "slot": "visit-context-header-slot",
+      "component": "visitContextHeader"
+    },
+    {
+      "name": "retrospective-date-time-picker",
+      "slot": "restrospective-date-time-picker-slot",
+      "component": "retrospectiveDateTimePicker"
+    }
+  ],
+  "featureFlags": [
+    {
+      "description": "Features to enter data for past visits. Includes the 'Edit Past Visit' button in the start visit dialog, and the 'Add Past Visit' button in the patient header",
+      "flagName": "rde",
+      "label": "Retrospective Data Entry"
     }
   ],
   "modals": [
-    {
-      "name": "cancel-visit-dialog",
-      "component": "cancelVisitModal"
-    },
     {
       "name": "delete-encounter-modal",
       "component": "deleteEncounterModal"
@@ -215,6 +206,10 @@
     {
       "name": "start-visit-dialog",
       "component": "startVisitModal"
+    },
+    {
+      "name": "visit-context-switcher",
+      "component": "visitContextSwitcherModal"
     }
   ],
   "pages": [
@@ -231,6 +226,12 @@
       "component": "markPatientDeceasedForm",
       "title": "Mark patient deceased",
       "type": "form"
+    },
+    {
+      "name": "start-visit-workspace-form",
+      "component": "startVisitWorkspace",
+      "title": "startVisitWorkspaceTitle",
+      "type": "start-visit"
     }
   ]
 }

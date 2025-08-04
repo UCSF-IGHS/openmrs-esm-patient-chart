@@ -8,8 +8,7 @@ export const esmPatientChartSchema = {
   },
   disableChangingVisitLocation: {
     _type: Type.Boolean,
-    _description:
-      "Whether the visit location field in the Start Visit form should be view-only. If so, the visit location will always be set to the user's login location.",
+    _description: 'Whether the visit location field in the Start Visit form should be view-only.',
     _default: false,
   },
   disableEmptyTabs: {
@@ -18,8 +17,8 @@ export const esmPatientChartSchema = {
     _description: 'Disable notes/tests/medications/encounters tabs when empty',
   },
   freeTextFieldConceptUuid: {
-    _default: '5622AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
     _type: Type.ConceptUuid,
+    _default: '5622AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
   },
   logo: {
     alt: {
@@ -29,23 +28,21 @@ export const esmPatientChartSchema = {
     },
     name: {
       _type: Type.String,
-      _default: null,
+      _default: '',
       _description: 'The organization name displayed when image is absent',
     },
     src: {
       _type: Type.String,
-      _default: null,
+      _default: '',
       _description: 'A path or URL to an image. Defaults to the OpenMRS SVG sprite.',
     },
   },
   notesConceptUuids: {
     _type: Type.Array,
+    _elements: {
+      _type: Type.ConceptUuid,
+    },
     _default: ['162169AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'],
-  },
-  numberOfVisitsToLoad: {
-    _type: Type.Number,
-    _description: 'The number of visits to load initially in the Visits Summary tab. Defaults to 5',
-    _default: 5,
   },
   obsConceptUuidsToHide: {
     _type: Type.Array,
@@ -60,6 +57,12 @@ export const esmPatientChartSchema = {
     _type: Type.UUID,
     _description: 'The UUID of the visit type to be used for the automatically created offline visits.',
     _default: 'a22733fa-3501-4020-a520-da024eeff088',
+  },
+  restrictByVisitLocationTag: {
+    _type: Type.Boolean,
+    _description:
+      'On the start visit form, whether to restrict the visit location to locations with the Visit Location tag',
+    _default: false,
   },
   showAllEncountersTab: {
     _type: Type.Boolean,
@@ -89,8 +92,8 @@ export const esmPatientChartSchema = {
   },
   visitAttributeTypes: {
     _type: Type.Array,
-    _description: 'List of visit attribute types shown when filling the visit form',
     _elements: {
+      _type: Type.Object,
       uuid: {
         _type: Type.UUID,
         _description: 'UUID of the visit attribute type',
@@ -106,6 +109,7 @@ export const esmPatientChartSchema = {
         _default: true,
       },
     },
+    _description: 'List of visit attribute types shown when filling the visit form',
     _default: [
       {
         uuid: '57ea0cbb-064f-4d09-8cf4-e8228700491c',
@@ -120,18 +124,33 @@ export const esmPatientChartSchema = {
     ],
   },
   visitDiagnosisConceptUuid: {
+    _type: Type.ConceptUuid,
     _default: '159947AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-    _type: Type.ConceptUuid,
-  },
-  visitQueueNumberAttributeUuid: {
-    _type: Type.ConceptUuid,
-    _description: 'The UUID of the visit attribute that contains the visit queue number.',
-    _default: 'c61ce16f-272a-41e7-9924-4c555d0932c5',
   },
   visitTypeResourceUrl: {
     _type: Type.String,
     _default: '/etl-latest/etl/patient/',
     _description: 'Custom URL to load resources required for showing recommended visit types',
+  },
+  trueConceptUuid: {
+    _type: Type.ConceptUuid,
+    _description: 'Default concept uuid for true in forms',
+    _default: '1065AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+  },
+  falseConceptUuid: {
+    _type: Type.ConceptUuid,
+    _description: 'Default concept uuid for false in forms',
+    _default: '1066AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+  },
+  otherConceptUuid: {
+    _type: Type.ConceptUuid,
+    _description: 'Default concept uuid for other in forms',
+    _default: '5622AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+  },
+  requireActiveVisitForEncounterTile: {
+    _type: Type.Boolean,
+    _description: 'Whether to require an active visit for the encounter tile',
+    _default: true,
   },
 };
 
@@ -145,14 +164,13 @@ export interface ChartConfig {
     src: string;
   };
   notesConceptUuids: string[];
-  numberOfVisitsToLoad: number;
   offlineVisitTypeUuid: string;
+  restrictByVisitLocationTag: boolean;
   showAllEncountersTab: boolean;
   showExtraVisitAttributesSlot: boolean;
   showRecommendedVisitTypeTab: boolean;
-  showServiceQueueFields: boolean;
-  showUpcomingAppointments: boolean;
-  visitQueueNumberAttributeUuid: string;
+  showServiceQueueFields: boolean; // used by extension from esm-service-queues-app
+  showUpcomingAppointments: boolean; // used by extension from esm-appointments-app
   visitTypeResourceUrl: string;
   visitAttributeTypes: Array<{
     displayInThePatientBanner: boolean;
@@ -161,4 +179,8 @@ export interface ChartConfig {
     uuid: string;
   }>;
   visitDiagnosisConceptUuid: string;
+  requireActiveVisitForEncounterTile: boolean;
+  trueConceptUuid: string;
+  falseConceptUuid: string;
+  otherConceptUuid: string;
 }

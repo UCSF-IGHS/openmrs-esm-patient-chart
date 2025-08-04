@@ -12,7 +12,8 @@
       "meta": {
         "slot": "patient-chart-test-results-dashboard-slot",
         "path": "Results",
-        "hideDashboardTitle": true
+        "hideDashboardTitle": true,
+        "layoutMode": "anchored"
       },
       "order": 4
     },
@@ -23,7 +24,10 @@
     },
     {
       "name": "results-viewer",
-      "slots": ["patient-chart-results-viewer-slot", "patient-chart-test-results-dashboard-slot"],
+      "slots": [
+        "patient-chart-results-viewer-slot",
+        "patient-chart-test-results-dashboard-slot"
+      ],
       "component": "resultsViewer"
     },
     {
@@ -41,6 +45,10 @@
     {
       "name": "print-modal",
       "component": "printModal"
+    },
+    {
+      "name": "edit-lab-results-modal",
+      "component": "editLabResultsModal"
     }
   ],
   "workspaces": [

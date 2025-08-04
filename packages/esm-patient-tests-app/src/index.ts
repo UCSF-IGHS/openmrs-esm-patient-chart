@@ -10,8 +10,7 @@ import { configSchema } from './config-schema';
 import { dashboardMeta } from './test-results/dashboard.meta';
 import externalOverviewComponent from './test-results/overview/external-overview.extension';
 import resultsViewerComponent from './test-results/results-viewer';
-
-const moduleName = '@openmrs/esm-patient-tests-app';
+import { moduleName } from './constants';
 
 const options = {
   featureName: 'patient-tests',
@@ -34,30 +33,31 @@ export const resultsViewer = getSyncLifecycle(resultsViewerComponent, options);
 export const printModal = getAsyncLifecycle(() => import('./test-results/print-modal/print-modal.extension'), options);
 
 export const testResultsDashboardLink =
-  // t('Results Viewer', 'Results Viewer')
+  // t('Results', 'Results')
   getSyncLifecycle(
     createDashboardLink({
       ...dashboardMeta,
-      moduleName,
     }),
     options,
   );
 
 export const labOrderPanel = getAsyncLifecycle(
-  () => import('./lab-orders/lab-order-basket-panel/lab-order-basket-panel.extension'),
+  () => import('./test-orders/lab-order-basket-panel/lab-order-basket-panel.extension'),
   options,
 );
 
 // t('addLabOrderWorkspaceTitle', 'Add lab order')
 export const addLabOrderWorkspace = getAsyncLifecycle(
-  () => import('./lab-orders/add-lab-order/add-lab-order.workspace'),
+  () => import('./test-orders/add-test-order/add-test-order.workspace'),
   options,
 );
 
-export const timelineResultsModal = getAsyncLifecycle(
-  () => import('./test-results/panel-timeline/timeline-results.modal'),
-  {
-    featureName: 'Timeline results',
-    moduleName,
-  },
+export const timelineResultsModal = getAsyncLifecycle(() => import('./test-results/trendline/timeline-results.modal'), {
+  featureName: 'Timeline results',
+  moduleName,
+});
+
+export const editLabResultsModal = getAsyncLifecycle(
+  () => import('./edit-test-results/modal/edit-lab-results.modal'),
+  options,
 );

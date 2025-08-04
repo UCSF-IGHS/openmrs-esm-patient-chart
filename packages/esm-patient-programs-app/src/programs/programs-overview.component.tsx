@@ -1,4 +1,4 @@
-import React, { type ComponentProps } from 'react';
+import React, { type ComponentProps, useCallback } from 'react';
 import classNames from 'classnames';
 import { useTranslation } from 'react-i18next';
 import {
@@ -15,25 +15,21 @@ import {
   TableHeader,
   TableRow,
 } from '@carbon/react';
-import {
-  launchPatientWorkspace,
-  CardHeader,
-  EmptyState,
-  ErrorState,
-  PatientChartPagination,
-} from '@openmrs/esm-patient-common-lib';
+import { CardHeader, EmptyState, ErrorState, PatientChartPagination } from '@openmrs/esm-patient-common-lib';
 import {
   AddIcon,
   type ConfigObject,
   formatDate,
   formatDatetime,
+  launchWorkspace,
   useConfig,
   useLayoutType,
   usePagination,
   isDesktop as desktopLayout,
 } from '@openmrs/esm-framework';
-import { findLastState, usePrograms } from './programs.resource';
 import { type ConfigurableProgram } from '../types';
+import { findLastState, usePrograms } from './programs.resource';
+import { ProgramsActionMenu } from './programs-action-menu.component';
 import styles from './programs-overview.scss';
 
 interface ProgramsOverviewProps {
@@ -44,7 +40,7 @@ interface ProgramsOverviewProps {
 const ProgramsOverview: React.FC<ProgramsOverviewProps> = ({ basePath, patientUuid }) => {
   const programsCount = 5;
   const { t } = useTranslation();
-  const config = useConfig() as ConfigObject;
+  const config = useConfig<ConfigObject>();
   const displayText = t('programs', 'Program enrollments');
   const headerTitle = t('carePrograms', 'Care Programs');
   const urlLabel = t('seeAll', 'See all');
@@ -58,7 +54,7 @@ const ProgramsOverview: React.FC<ProgramsOverviewProps> = ({ basePath, patientUu
 
   const { results: paginatedEnrollments, goTo, currentPage } = usePagination(enrollments ?? [], programsCount);
 
-  const launchProgramsForm = React.useCallback(() => launchPatientWorkspace('programs-form-workspace'), []);
+  const launchProgramsForm = useCallback(() => launchWorkspace('programs-form-workspace'), []);
 
   const tableHeaders = [
     {
@@ -103,8 +99,14 @@ const ProgramsOverview: React.FC<ProgramsOverviewProps> = ({ basePath, patientUu
     });
   }, [paginatedEnrollments, t]);
 
-  if (isLoading) return <DataTableSkeleton role="progressbar" compact={isDesktop} zebra />;
-  if (error) return <ErrorState error={error} headerTitle={headerTitle} />;
+  if (isLoading) {
+    return <DataTableSkeleton role="progressbar" compact={isDesktop} zebra />;
+  }
+
+  if (error) {
+    return <ErrorState error={error} headerTitle={headerTitle} />;
+  }
+
   if (activeEnrollments?.length) {
     return (
       <div className={styles.widgetCard}>
@@ -132,7 +134,7 @@ const ProgramsOverview: React.FC<ProgramsOverviewProps> = ({ basePath, patientUu
           />
         )}
         <DataTable rows={tableRows} headers={tableHeaders} isSortable size={isTablet ? 'lg' : 'sm'} useZebraStyles>
-          {({ rows, headers, getHeaderProps, getTableProps }) => (
+          {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
             <TableContainer>
               <Table aria-label="programs overview" {...getTableProps()}>
                 <TableHead>
@@ -142,20 +144,25 @@ const ProgramsOverview: React.FC<ProgramsOverviewProps> = ({ basePath, patientUu
                         className={classNames(styles.productiveHeading01, styles.text02)}
                         {...getHeaderProps({
                           header,
-                          isSortable: header.isSortable,
                         })}
                       >
-                        {header.header?.content ?? header.header}
+                        {header.header}
                       </TableHeader>
                     ))}
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {rows.map((row) => (
-                    <TableRow key={row.id}>
+                  {rows.map((row, i) => (
+                    <TableRow key={row.id} {...getRowProps({ row })}>
                       {row.cells.map((cell) => (
                         <TableCell key={cell.id}>{cell.value?.content ?? cell.value}</TableCell>
                       ))}
+                      <TableCell className="cds--table-column-menu">
+                        <ProgramsActionMenu
+                          patientUuid={patientUuid}
+                          programEnrollmentId={activeEnrollments[i]?.uuid}
+                        />
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

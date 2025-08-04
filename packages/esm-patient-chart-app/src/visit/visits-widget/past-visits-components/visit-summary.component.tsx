@@ -1,39 +1,25 @@
 import React, { useMemo } from 'react';
 import classNames from 'classnames';
 import { useTranslation } from 'react-i18next';
-import { Tab, TabList, TabPanel, TabPanels, Tabs, Tag } from '@carbon/react';
+import { Tab, TabList, TabPanel, TabPanels, Tabs } from '@carbon/react';
 import {
-  type AssignedExtension,
+  type Diagnosis,
+  DiagnosisTags,
   Extension,
   ExtensionSlot,
   formatTime,
   parseDate,
+  useAssignedExtensions,
   useConfig,
-  useConnectedExtensions,
-  useLayoutType,
   type Visit,
 } from '@openmrs/esm-framework';
-import {
-  type Diagnosis,
-  type Encounter,
-  mapEncounters,
-  type Note,
-  type Observation,
-  type Order,
-  type OrderItem,
-} from '../visit.resource';
-import VisitsTable from './visits-table/visits-table.component';
+import type { ExternalOverviewProps } from '@openmrs/esm-patient-common-lib';
+import { type Note, type Order, type OrderItem } from '../visit.resource';
 import MedicationSummary from './medications-summary.component';
 import NotesSummary from './notes-summary.component';
 import TestsSummary from './tests-summary.component';
-import type { ExternalOverviewProps } from '@openmrs/esm-patient-common-lib';
+import VisitEncountersTable from './encounters-table/visit-encounters-table.component';
 import styles from './visit-summary.scss';
-
-interface DiagnosisItem {
-  diagnosis: string;
-  rank: number;
-  type: string;
-}
 
 interface VisitSummaryProps {
   visit: Visit;
@@ -45,20 +31,17 @@ const visitSummaryPanelSlot = 'visit-summary-panels';
 const VisitSummary: React.FC<VisitSummaryProps> = ({ visit, patientUuid }) => {
   const config = useConfig();
   const { t } = useTranslation();
-  const layout = useLayoutType();
-  const extensions = useConnectedExtensions(visitSummaryPanelSlot) as AssignedExtension[];
+  const extensions = useAssignedExtensions(visitSummaryPanelSlot);
 
-  const [diagnoses, notes, medications]: [Array<DiagnosisItem>, Array<Note>, Array<OrderItem>] = useMemo(() => {
+  const [diagnoses, notes, medications]: [Array<Diagnosis>, Array<Note>, Array<OrderItem>] = useMemo(() => {
     // Medication Tab
     const medications: Array<OrderItem> = [];
     // Diagnoses in a Visit
-    const diagnoses: Array<DiagnosisItem> = [];
+    const diagnoses: Array<Diagnosis> = [];
     // Notes Tab
     const notes: Array<Note> = [];
 
-    // Iterating through every Encounter
-    visit?.encounters?.forEach((enc: Encounter) => {
-      // Orders of every encounter put in a single array.
+    visit?.encounters?.forEach((enc) => {
       if (enc.hasOwnProperty('orders')) {
         medications.push(
           ...enc.orders.map((order: Order) => ({
@@ -74,24 +57,18 @@ const VisitSummary: React.FC<VisitSummaryProps> = ({ visit, patientUuid }) => {
       // Check if there is a diagnosis associated with this encounter
       if (enc.hasOwnProperty('diagnoses')) {
         if (enc.diagnoses.length > 0) {
-          enc.diagnoses.forEach((diagnosis: Diagnosis) => {
-            // Putting all the diagnoses in a single array.
-            diagnoses.push({
-              diagnosis: diagnosis.display,
-              type: diagnosis.rank === 1 ? 'red' : 'blue',
-              rank: diagnosis.rank,
-            });
-          });
+          const validDiagnoses = enc.diagnoses.filter((diagnosis) => !diagnosis.voided);
+          diagnoses.push(...validDiagnoses);
         }
       }
 
       // Check for Visit Diagnoses and Notes
       if (enc.hasOwnProperty('obs')) {
-        enc.obs.forEach((obs: Observation) => {
+        enc.obs.forEach((obs) => {
           if (config.notesConceptUuids?.includes(obs.concept.uuid)) {
             // Putting all notes in a single array.
             notes.push({
-              note: obs.value,
+              note: obs.value as string, // TODO: add better typing check
               provider: {
                 name: enc.encounterProviders.length ? enc.encounterProviders[0].provider.person.display : '',
                 role: enc.encounterProviders.length ? enc.encounterProviders[0].encounterRole.display : '',
@@ -111,7 +88,7 @@ const VisitSummary: React.FC<VisitSummaryProps> = ({ visit, patientUuid }) => {
   }, [config.notesConceptUuids, visit?.encounters]);
 
   const testsFilter = useMemo<ExternalOverviewProps['filter']>(() => {
-    const encounterIds = visit?.encounters.map((e) => `Encounter/${e.uuid}`);
+    const encounterIds = visit?.encounters?.map((e) => `Encounter/${e.uuid}`);
     return ([entry]) => {
       return encounterIds.includes(entry.encounter?.reference);
     };
@@ -122,18 +99,14 @@ const VisitSummary: React.FC<VisitSummaryProps> = ({ visit, patientUuid }) => {
       <p className={styles.diagnosisLabel}>{t('diagnoses', 'Diagnoses')}</p>
       <div className={styles.diagnosesList}>
         {diagnoses.length > 0 ? (
-          diagnoses.map((diagnosis, i) => (
-            <Tag key={`${diagnosis.diagnosis}-${i}`} type={diagnosis.type}>
-              {diagnosis.diagnosis}
-            </Tag>
-          ))
+          <DiagnosisTags diagnoses={diagnoses} />
         ) : (
           <p className={classNames(styles.bodyLong01, styles.text02)} style={{ marginBottom: '0.5rem' }}>
             {t('noDiagnosesFound', 'No diagnoses found')}
           </p>
         )}
       </div>
-      <Tabs className={classNames(styles.verticalTabs, layout === 'tablet' ? styles.tabletTabs : styles.desktopTabs)}>
+      <Tabs>
         <TabList aria-label="Visit summary tabs" className={styles.tablist}>
           <Tab
             className={classNames(styles.tab, styles.bodyLong01)}
@@ -173,13 +146,13 @@ const VisitSummary: React.FC<VisitSummaryProps> = ({ visit, patientUuid }) => {
             <NotesSummary notes={notes} />
           </TabPanel>
           <TabPanel>
-            <TestsSummary patientUuid={patientUuid} encounters={visit?.encounters as Array<Encounter>} />
+            <TestsSummary patientUuid={patientUuid} encounters={visit?.encounters} />
           </TabPanel>
           <TabPanel>
             <MedicationSummary medications={medications} />
           </TabPanel>
           <TabPanel>
-            <VisitsTable visits={mapEncounters(visit)} showAllEncounters={false} patientUuid={patientUuid} />
+            <VisitEncountersTable visit={visit} patientUuid={patientUuid} />
           </TabPanel>
           <ExtensionSlot name={visitSummaryPanelSlot}>
             <TabPanel>

@@ -1,18 +1,10 @@
+/* eslint-disable playwright/no-nested-step */
 import { expect } from '@playwright/test';
-import { type Visit } from '@openmrs/esm-framework';
-import { generateRandomPatient, type Patient, startVisit, endVisit, deletePatient } from '../commands';
 import { test } from '../core';
-import { ResultsViewerPage, VisitsPage } from '../pages';
+import { ChartPage, ResultsViewerPage, VisitsPage } from '../pages';
 
-let patient: Patient;
-let visit: Visit;
-
-test.beforeEach(async ({ api }) => {
-  patient = await generateRandomPatient(api);
-  visit = await startVisit(api, patient.uuid);
-});
-
-test('Record and edit test results', async ({ page }) => {
+test('Record and edit test results', async ({ page, patient }) => {
+  const chartPage = new ChartPage(page);
   const resultsViewerPage = new ResultsViewerPage(page);
   const visitsPage = new VisitsPage(page);
   const form = page.locator('[data-extension-slot-name="form-widget-slot"]');
@@ -150,7 +142,7 @@ test('Record and edit test results', async ({ page }) => {
     {
       label: 'Total Protein (g/dL)',
       resultsPageReference: 'Total Protein',
-      value: '7.0',
+      value: '7',
       updatedValue: '8',
     },
     {
@@ -209,12 +201,12 @@ test('Record and edit test results', async ({ page }) => {
     },
   ];
 
-  await test.step('When I visit the results viewer page', async () => {
-    await resultsViewerPage.goTo(patient.uuid);
+  await test.step('When I visit the chart summary page', async () => {
+    await chartPage.goTo(patient.uuid);
   });
 
-  await test.step('And I click on the `Clinical forms` button on the siderail', async () => {
-    await page.getByLabel(/clinical forms/i).click();
+  await test.step('And I click the `Clinical forms` button on the siderail', async () => {
+    await page.getByLabel(/clinical forms/i, { exact: true }).click();
   });
 
   await test.step('Then I should see the clinical forms workspace', async () => {
@@ -226,11 +218,15 @@ test('Record and edit test results', async ({ page }) => {
     await expect(page.getByRole('cell', { name: /laboratory test results/i })).toBeVisible();
   });
 
-  await test.step('When I launch the `Laboratory Test Results` form', async () => {
+  await test.step('When I click the `Laboratory Test Results` link to launch the form', async () => {
     await page.getByText(/laboratory test results/i).click();
   });
 
-  await test.step('And I fill the "Complete Blood Count" section', async () => {
+  await test.step('Then I should see the `Laboratory Test Results` form launch in the workspace', async () => {
+    await expect(page.getByText(/laboratory test results/i)).toBeVisible();
+  });
+
+  await test.step('When I fill the "Complete Blood Count" section', async () => {
     for (const { label, value } of completeBloodCountData) {
       await test.step(label, async () => {
         await form.getByLabel(label, { exact: true }).fill(value);
@@ -276,6 +272,7 @@ test('Record and edit test results', async ({ page }) => {
         });
       }
     });
+
     for (const { resultsPageReference, value } of chemistryResultsData) {
       await test.step(resultsPageReference, async () => {
         const row = page.locator(`tr:has-text("${resultsPageReference}"):has(td:has-text("${value}"))`).first();
@@ -299,7 +296,20 @@ test('Record and edit test results', async ({ page }) => {
     ).toBeVisible();
   });
 
-  await test.step('When I launch the overflow menu of the created test results', async () => {
+  await test.step('When I filter the encounters to adult visit', async () => {
+    await page.getByRole('combobox', { name: /filter by encounter type/i }).click();
+    await page.getByText(/adult visit/i).click();
+  });
+
+  await test.step('Then I should NOT see the newly added test results included in the list', async () => {
+    await expect(page.getByText(/No encounters to display/i)).toBeVisible();
+  });
+
+  await test.step('When I clear the filter', async () => {
+    await page.getByRole('button', { name: /clear selected item/i }).click();
+  });
+
+  await test.step('And I launch the overflow menu of the created test results', async () => {
     await page
       .getByRole('button', { name: /options/i })
       .nth(0)
@@ -346,24 +356,15 @@ test('Record and edit test results', async ({ page }) => {
     for (const { resultsPageReference, updatedValue } of completeBloodCountData) {
       await test.step(resultsPageReference, async () => {
         const row = page.locator(`tr:has-text("${resultsPageReference}"):has(td:has-text("${updatedValue}"))`).first();
-        const valueCell = row.locator('td:nth-child(2)');
-
-        await expect(valueCell).toContainText(updatedValue);
+        await expect(row).toBeVisible();
       });
     }
 
     for (const { resultsPageReference, updatedValue } of chemistryResultsData) {
       await test.step(resultsPageReference, async () => {
         const row = page.locator(`tr:has-text("${resultsPageReference}"):has(td:has-text("${updatedValue}"))`).first();
-        const valueCell = row.locator('td:nth-child(2)');
-
-        await expect(valueCell).toContainText(updatedValue);
+        await expect(row).toBeVisible();
       });
     }
   });
-});
-
-test.afterEach(async ({ api }) => {
-  await endVisit(api, visit.uuid);
-  await deletePatient(api, patient.uuid);
 });

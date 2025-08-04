@@ -1,20 +1,26 @@
 import { openmrsFetch, type OpenmrsResource, parseDate, restBaseUrl, type Visit } from '@openmrs/esm-framework';
-import { getPatientUuidFromStore } from '../store/patient-chart-store';
 import { type OrderBasketStore, orderBasketStore } from './store';
-import { type ExtractedOrderErrorObject, type OrderBasketItem, type OrderErrorObject, type OrderPost } from './types';
+import type {
+  DrugOrderPost,
+  TestOrderPost,
+  ExtractedOrderErrorObject,
+  OrderBasketItem,
+  OrderErrorObject,
+  OrderPost,
+} from './types';
 
 export async function postOrdersOnNewEncounter(
   patientUuid: string,
   orderEncounterType: string,
-  activeVisit: Visit | null,
+  currentVisit: Visit | null,
   sessionLocationUuid: string,
   abortController?: AbortController,
 ) {
   const now = new Date();
-  const visitStartDate = parseDate(activeVisit?.startDatetime);
-  const visitEndDate = parseDate(activeVisit?.stopDatetime);
+  const visitStartDate = parseDate(currentVisit?.startDatetime);
+  const visitEndDate = parseDate(currentVisit?.stopDatetime);
   let encounterDate: Date;
-  if (!activeVisit || (visitStartDate < now && (!visitEndDate || visitEndDate > now))) {
+  if (!currentVisit || (visitStartDate < now && (!visitEndDate || visitEndDate > now))) {
     encounterDate = now;
   } else {
     console.warn(
@@ -26,7 +32,7 @@ export async function postOrdersOnNewEncounter(
   const { items, postDataPrepFunctions }: OrderBasketStore = orderBasketStore.getState();
   const patientItems = items[patientUuid];
 
-  const orders: Array<OrderPost> = [];
+  const orders: Array<DrugOrderPost | TestOrderPost> = [];
 
   Object.entries(patientItems).forEach(([grouping, groupOrders]) => {
     groupOrders.forEach((order) => {
@@ -39,7 +45,7 @@ export async function postOrdersOnNewEncounter(
     location: sessionLocationUuid,
     encounterType: orderEncounterType,
     encounterDatetime: encounterDate,
-    visit: activeVisit?.uuid,
+    visit: currentVisit?.uuid,
     obs: [],
     orders,
   };
@@ -54,8 +60,7 @@ export async function postOrdersOnNewEncounter(
   }).then((res) => res?.data?.uuid);
 }
 
-export async function postOrders(encounterUuid: string, abortController: AbortController) {
-  const patientUuid = getPatientUuidFromStore();
+export async function postOrders(patientUuid: string, encounterUuid: string, abortController: AbortController) {
   const { items, postDataPrepFunctions }: OrderBasketStore = orderBasketStore.getState();
   const patientItems = items[patientUuid];
 
@@ -64,8 +69,14 @@ export async function postOrders(encounterUuid: string, abortController: AbortCo
     const orders = patientItems[grouping];
     for (let i = 0; i < orders.length; i++) {
       const order = orders[i];
-      const dto = postDataPrepFunctions[grouping](order, patientUuid, encounterUuid);
-      await postOrder(dto, abortController).catch((error) => {
+      const dataPrepFn = postDataPrepFunctions[grouping];
+
+      if (typeof dataPrepFn !== 'function') {
+        console.warn(`The postDataPrep function registered for ${grouping} orders is not a function`);
+        continue;
+      }
+
+      await postOrder(dataPrepFn(order, patientUuid, encounterUuid), abortController).catch((error) => {
         erroredItems.push({
           ...order,
           orderError: error,

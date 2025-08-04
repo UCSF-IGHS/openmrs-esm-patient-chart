@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ExtensionSlot, useConnectivity, usePatient } from '@openmrs/esm-framework';
+import { useSWRConfig } from 'swr';
+import { ExtensionSlot, useConnectivity, useVisit } from '@openmrs/esm-framework';
 import {
   clinicalFormsWorkspace,
+  invalidateVisitAndEncounterData,
+  useVisitOrOfflineVisit,
   type DefaultPatientWorkspaceProps,
   type FormEntryProps,
-  useVisitOrOfflineVisit,
 } from '@openmrs/esm-patient-common-lib';
 
 interface FormEntryComponentProps extends DefaultPatientWorkspaceProps {
@@ -15,6 +17,7 @@ interface FormEntryComponentProps extends DefaultPatientWorkspaceProps {
 
 const FormEntry: React.FC<FormEntryComponentProps> = ({
   patientUuid,
+  patient,
   clinicalFormsWorkspaceName = clinicalFormsWorkspace,
   closeWorkspace,
   closeWorkspaceWithSavedChanges,
@@ -24,10 +27,12 @@ const FormEntry: React.FC<FormEntryComponentProps> = ({
 }) => {
   const { encounterUuid, formUuid, visitStartDatetime, visitStopDatetime, visitTypeUuid, visitUuid, additionalProps } =
     formInfo || {};
-  const { patient } = usePatient(patientUuid);
   const { currentVisit } = useVisitOrOfflineVisit(patientUuid);
   const [showForm, setShowForm] = useState(true);
   const isOnline = useConnectivity();
+  const { mutate: mutateCurrentVisit } = useVisit(patientUuid);
+  const { mutate: globalMutate } = useSWRConfig();
+
   const state = useMemo(
     () => ({
       view: 'form',
@@ -46,6 +51,12 @@ const FormEntry: React.FC<FormEntryComponentProps> = ({
       },
       closeWorkspaceWithSavedChanges: () => {
         typeof mutateForm === 'function' && mutateForm();
+        // Update current visit data for critical components
+        mutateCurrentVisit();
+
+        // Also invalidate visit history and encounter tables since form submission may create/update encounters
+        invalidateVisitAndEncounterData(globalMutate, patientUuid);
+
         closeWorkspaceWithSavedChanges();
       },
       promptBeforeClosing,
@@ -53,25 +64,27 @@ const FormEntry: React.FC<FormEntryComponentProps> = ({
       clinicalFormsWorkspaceName,
     }),
     [
-      formUuid,
-      visitUuid,
-      visitTypeUuid,
-      encounterUuid,
-      visitStartDatetime,
-      visitStopDatetime,
-      currentVisit?.uuid,
-      currentVisit?.visitType?.uuid,
-      currentVisit?.startDatetime,
-      currentVisit?.stopDatetime,
-      patientUuid,
-      patient,
-      isOnline,
-      mutateForm,
-      closeWorkspace,
-      closeWorkspaceWithSavedChanges,
-      promptBeforeClosing,
       additionalProps,
       clinicalFormsWorkspaceName,
+      closeWorkspace,
+      closeWorkspaceWithSavedChanges,
+      currentVisit?.startDatetime,
+      currentVisit?.stopDatetime,
+      currentVisit?.uuid,
+      currentVisit?.visitType?.uuid,
+      encounterUuid,
+      formUuid,
+      globalMutate,
+      isOnline,
+      mutateCurrentVisit,
+      mutateForm,
+      patient,
+      patientUuid,
+      promptBeforeClosing,
+      visitStartDatetime,
+      visitStopDatetime,
+      visitTypeUuid,
+      visitUuid,
     ],
   );
 
@@ -87,6 +100,7 @@ const FormEntry: React.FC<FormEntryComponentProps> = ({
 
   return (
     <div>
+      <ExtensionSlot name="visit-context-header-slot" state={{ patientUuid }} />
       {showForm && formInfo && patientUuid && patient && <ExtensionSlot name="form-widget-slot" state={state} />}
     </div>
   );

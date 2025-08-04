@@ -1,17 +1,24 @@
 import React from 'react';
 import { screen, render, renderHook } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ActionMenuButton, launchWorkspace, useLayoutType, usePatient, useWorkspaces } from '@openmrs/esm-framework';
+import {
+  ActionMenuButton,
+  launchWorkspace,
+  type OpenWorkspace,
+  useFeatureFlag,
+  useLayoutType,
+  useWorkspaces,
+  type WorkspacesInfo,
+} from '@openmrs/esm-framework';
 import { type OrderBasketItem, useOrderBasket } from '@openmrs/esm-patient-common-lib';
 import { mockPatient } from 'tools';
 import { orderBasketStore } from '@openmrs/esm-patient-common-lib/src/orders/store';
 import OrderBasketActionButton from './order-basket-action-button.extension';
 
-const mockUseLayoutType = jest.mocked(useLayoutType);
-const mockUsePatient = jest.mocked(usePatient);
-const mockUseWorkspaces = useWorkspaces as jest.Mock;
-const mockLaunchWorkspace = launchWorkspace as jest.Mock;
 const MockActionMenuButton = jest.mocked(ActionMenuButton);
+const mockLaunchWorkspace = jest.mocked(launchWorkspace);
+const mockUseLayoutType = jest.mocked(useLayoutType);
+const mockUseWorkspaces = jest.mocked(useWorkspaces);
 
 MockActionMenuButton.mockImplementation(({ handler, label, tagContent }) => (
   <button onClick={handler}>
@@ -20,15 +27,14 @@ MockActionMenuButton.mockImplementation(({ handler, label, tagContent }) => (
 ));
 
 mockUseWorkspaces.mockReturnValue({
-  workspaces: [{ type: 'order' }],
+  workspaces: [{ type: 'order-basket' } as OpenWorkspace],
   workspaceWindowState: 'normal',
-});
+} as unknown as WorkspacesInfo);
 
 // This pattern of mocking seems to be required: defining the mocked function here and
 // then assigning it with an arrow function wrapper in jest.mock. It is very particular.
 // I think it is related to this: https://github.com/swc-project/jest/issues/14#issuecomment-1238621942
 
-const mockLaunchPatientWorkspace = jest.fn();
 const mockLaunchStartVisitPrompt = jest.fn();
 const mockUseVisitOrOfflineVisit = jest.fn(() => ({
   activeVisit: {
@@ -40,17 +46,6 @@ const mockUseVisitOrOfflineVisit = jest.fn(() => ({
 }));
 const mockGetPatientUuidFromUrl = jest.fn(() => mockPatient.id);
 const mockUseSystemVisitSetting = jest.fn();
-
-jest.mock('@openmrs/esm-patient-common-lib', () => {
-  const originalModule = jest.requireActual('@openmrs/esm-patient-common-lib');
-
-  return {
-    ...originalModule,
-    getPatientUuidFromUrl: () => mockGetPatientUuidFromUrl(),
-    getPatientUuidFromStore: () => mockGetPatientUuidFromUrl(),
-    launchPatientWorkspace: (arg) => mockLaunchPatientWorkspace(arg),
-  };
-});
 
 jest.mock('@openmrs/esm-patient-common-lib/src/useSystemVisitSetting', () => {
   return {
@@ -73,8 +68,9 @@ jest.mock('@openmrs/esm-patient-common-lib/src/offline/visit', () => {
   return { useVisitOrOfflineVisit: () => mockUseVisitOrOfflineVisit() };
 });
 
-mockUsePatient.mockReturnValue({ patient: mockPatient, patientUuid: mockPatient.id, isLoading: false, error: null });
 mockUseSystemVisitSetting.mockReturnValue({ systemVisitEnabled: false });
+
+const mockedUseFeatureFlag = jest.mocked(useFeatureFlag);
 
 describe('<OrderBasketActionButton/>', () => {
   beforeAll(() => {
@@ -110,6 +106,7 @@ describe('<OrderBasketActionButton/>', () => {
   });
 
   it('should prompt user to start visit if no currentVisit found', async () => {
+    mockedUseFeatureFlag.mockReturnValue(false);
     const user = userEvent.setup();
     mockUseLayoutType.mockReturnValue('small-desktop');
     mockUseSystemVisitSetting.mockReturnValue({ systemVisitEnabled: true });
@@ -123,7 +120,7 @@ describe('<OrderBasketActionButton/>', () => {
     const orderBasketButton = screen.getByRole('button', { name: /order basket/i });
     expect(orderBasketButton).toBeInTheDocument();
     await user.click(orderBasketButton);
-    expect(mockLaunchPatientWorkspace).not.toHaveBeenCalled();
+    expect(mockLaunchWorkspace).not.toHaveBeenCalled();
     expect(mockLaunchStartVisitPrompt).toHaveBeenCalled();
   });
 

@@ -10,6 +10,7 @@
 
 .orderBasketContainer {
   margin: layout.$spacing-05;
+  flex: 1;
 }
 
 .orderBasketContainer :global(.cds--btn-set .cds--btn) {
@@ -63,4 +64,8 @@
     padding: layout.$spacing-06 layout.$spacing-05;
     background-color: $ui-02;
   }
+}
+
+.orderPanel {
+  margin: layout.$spacing-07 0;
 }
