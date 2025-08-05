@@ -2,11 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { debounce } from 'lodash-es';
 import fuzzy from 'fuzzy';
-import { DataTableSkeleton, InlineLoading } from '@carbon/react';
 import { formatDatetime, useLayoutType, ResponsiveWrapper } from '@openmrs/esm-framework';
 import type { CompletedFormInfo, Form } from '../types';
 import FormsTable from './forms-table.component';
 import styles from './forms-list.scss';
+import { DataTableSkeleton, InlineLoading } from '@carbon/react';
 
 export type FormsListProps = {
   completedForms?: Array<CompletedFormInfo>;
@@ -68,19 +68,25 @@ const FormsList: React.FC<FormsListProps> = ({
 
   // Set up intersection observer for infinite scrolling
   useEffect(() => {
-    if (!enableInfiniteScrolling || !loadMore || !hasMore) {
+    // Exit early if infinite scrolling is not enabled or loadMore function is not provided
+    if (!enableInfiniteScrolling || !loadMore) {
       return;
     }
 
+    // Create a new IntersectionObserver instance
     const observer = new IntersectionObserver(
       (entries) => {
         const first = entries[0];
-
-        if (first.isIntersecting && !isValidating) {
+        // Load more items when the element is intersecting (visible) and more items are available
+        if (first.isIntersecting && hasMore && !isValidating) {
           loadMore();
         }
       },
-      { threshold: 0.1 },
+      {
+        // Even more aggressive settings to ensure it triggers reliably
+        threshold: 0.01, // Trigger when even 1% of the element is visible
+        rootMargin: '500px 0px', // Start loading 500px before the element comes into view
+      },
     );
 
     observerRef.current = observer;
@@ -90,6 +96,7 @@ const FormsList: React.FC<FormsListProps> = ({
       observer.observe(loadMoreRef.current);
     }
 
+    // Cleanup function
     return () => {
       if (observerRef.current) {
         observerRef.current.disconnect();
@@ -98,20 +105,58 @@ const FormsList: React.FC<FormsListProps> = ({
   }, [enableInfiniteScrolling, loadMore, hasMore, isValidating]);
 
   // Create a callback ref to observe the element when it becomes available
-  const setLoadMoreRef = useCallback((node: HTMLDivElement | null) => {
-    if (loadMoreRef.current) {
-      // Clean up previous observation
-      if (observerRef.current) {
+  const setLoadMoreRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      // Clean up previous observation if needed
+      if (loadMoreRef.current && observerRef.current) {
         observerRef.current.unobserve(loadMoreRef.current);
       }
-    }
 
-    loadMoreRef.current = node;
+      // Update the ref to point to the new node
+      loadMoreRef.current = node;
 
-    if (node && observerRef.current) {
-      observerRef.current.observe(node);
+      // Only observe if all conditions are met
+      if (node && observerRef.current && hasMore && enableInfiniteScrolling) {
+        observerRef.current.observe(node);
+
+        // Force re-check intersection on new element (helps with cases where the element is already in view)
+        setTimeout(() => {
+          if (node.getBoundingClientRect().top < window.innerHeight && hasMore && !isValidating) {
+            loadMore?.();
+          }
+        }, 100);
+      }
+    },
+    [hasMore, enableInfiniteScrolling, loadMore, isValidating],
+  ); // Force a re-check on visibility after component mount and when form data changes
+  useEffect(() => {
+    if (enableInfiniteScrolling && hasMore && !isValidating && loadMore) {
+      // Give time for the component to render
+      const timeoutId = setTimeout(() => {
+        // Check if we have fewer items than would fill the screen
+        const container = document.querySelector(`.${styles.infiniteScrollContainer}`);
+        const viewportHeight = window.innerHeight;
+
+        if (container) {
+          const containerRect = container.getBoundingClientRect();
+          // Special handling for RFE forms - if section name is RFE Forms, be more aggressive about loading
+          const isRFESection = sectionName?.toLowerCase().includes('rfe');
+          const shouldLoadMore =
+            // Standard conditions for loading more
+            containerRect.height < viewportHeight * 0.8 ||
+            (loadMoreRef.current && loadMoreRef.current.getBoundingClientRect().top < viewportHeight) ||
+            // Special condition for RFE forms - load more aggressively
+            (isRFESection && completedForms && completedForms.length < 20 && totalLoaded > completedForms.length);
+
+          if (shouldLoadMore) {
+            loadMore();
+          }
+        }
+      }, 300);
+
+      return () => clearTimeout(timeoutId);
     }
-  }, []);
+  }, [completedForms, enableInfiniteScrolling, hasMore, isValidating, loadMore, sectionName, totalLoaded]);
 
   const filteredForms = useMemo(() => {
     // If using infinite scrolling with server-side search, don't filter client-side
@@ -178,9 +223,22 @@ const FormsList: React.FC<FormsListProps> = ({
 
       {/* Load more trigger */}
       {hasMore && (
-        <div ref={setLoadMoreRef} className={styles.loadMoreTrigger}>
-          {isValidating && <InlineLoading description={t('loadingMoreForms', 'Loading more forms...')} />}
-          {!isValidating && (
+        <div
+          ref={setLoadMoreRef}
+          className={styles.loadMoreTrigger}
+          data-testid="load-more-trigger"
+          style={{
+            minHeight: '200px',
+            padding: '20px',
+            visibility: 'visible',
+            margin: '20px 0',
+            border: '1px dashed #e0e0e0',
+            borderRadius: '4px',
+          }}
+        >
+          {isValidating ? (
+            <InlineLoading description={t('loadingMoreForms', 'Loading more forms...')} />
+          ) : (
             <div style={{ minHeight: '50px', padding: '20px', textAlign: 'center' }}>
               {t('scrollToLoadMore', 'Scroll to load more forms...')}
             </div>

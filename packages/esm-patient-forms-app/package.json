@@ -1,9 +1,9 @@
 {
-  "name": "@openmrs/esm-patient-forms-app",
+  "name": "@ohri/esm-patient-forms-app",
   "version": "10.2.0",
   "license": "MPL-2.0",
   "description": "Patient forms microfrontend for the OpenMRS SPA",
-  "browser": "dist/openmrs-esm-patient-forms-app.js",
+  "browser": "dist/ohri-esm-patient-forms-app.js",
   "main": "src/index.ts",
   "source": true,
   "scripts": {

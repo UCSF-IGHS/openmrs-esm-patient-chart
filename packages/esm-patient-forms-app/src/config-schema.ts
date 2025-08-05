@@ -118,9 +118,9 @@ export const configSchema = {
   },
   enableInfiniteScrolling: {
     _type: Type.Boolean,
-    _default: false,
+    _default: true,
     _description:
-      'Whether to enable infinite scrolling for forms with server-side search. When disabled, uses client-side pagination and search.',
+      'Whether to enable infinite scrolling for forms with server-side search. When disabled, uses client-side pagination and search. Note: Infinite scrolling only applies to forms not included in any section. Forms within sections will always use client-side pagination and filtering.',
   },
 };
 

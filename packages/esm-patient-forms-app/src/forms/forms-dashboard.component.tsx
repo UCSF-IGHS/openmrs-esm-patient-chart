@@ -141,19 +141,24 @@ const FormsDashboard: React.FC<FormsDashboardProps> = ({
         />
       ) : (
         sections.map((section) => {
+          // Get forms for this section only
+          const sectionForms = section.availableForms;
+          // Pass section-specific hasMore flag for RFE forms
+          const sectionHasMore = section.name === 'RFE Forms' ? sectionForms?.length < totalLoaded && hasMore : hasMore;
+
           return (
             <FormsList
               key={`form-section-${section.name}`}
               sectionName={section.name}
-              completedForms={section.availableForms}
+              completedForms={sectionForms}
               error={error}
               handleFormOpen={handleFormOpen}
               onSearch={handleSearch}
               isValidating={isValidating}
               loadMore={loadMore}
-              hasMore={hasMore}
+              hasMore={sectionHasMore}
               isLoading={isLoading}
-              totalLoaded={totalLoaded}
+              totalLoaded={section.name === 'RFE Forms' ? sectionForms?.length || 0 : totalLoaded}
               enableInfiniteScrolling={useInfiniteScrolling}
             />
           );

@@ -6,3 +6,9 @@ export const customEncounterRepresentation = `custom:(uuid,encounterDatetime,enc
 
 export const formEncounterUrl = `${restBaseUrl}/form?v=custom:${customFormRepresentation}`;
 export const formEncounterUrlPoc = `${restBaseUrl}/form?v=custom:${customFormRepresentation}&q=poc`;
+
+// Sorting options for the forms
+export const FORM_SORT_OPTIONS = {
+  NAME: 'name',
+  MOST_RECENT: 'most-recent',
+};
