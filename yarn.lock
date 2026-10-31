@@ -4740,7 +4740,7 @@ __metadata:
     webpack: "npm:^5.99.9"
     webpack-cli: "npm:^6.0.1"
     webpack-dev-server: "npm:^5.2.1"
-    zod: "npm:^3.23.8"
+    zod: "npm:^4.6.6"
   languageName: unknown
   linkType: soft
 
@@ -4828,7 +4828,7 @@ __metadata:
     lodash-es: "npm:^4.17.21"
     react-hook-form: "npm:^7.46.2"
     webpack: "npm:^5.99.9"
-    zod: "npm:^3.23.8"
+    zod: "npm:^4.6.6"
   peerDependencies:
     "@openmrs/esm-framework": 6.x
     "@openmrs/esm-patient-common-lib": 10.x
@@ -26759,10 +26759,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"zod@npm:^3.23.8":
-  version: 3.24.1
-  resolution: "zod@npm:3.24.1"
-  checksum: 10/54e25956495dec22acb9399c168c6ba657ff279801a7fcd0530c414d867f1dcca279335e160af9b138dd70c332e17d548be4bc4d2f7eaf627dead50d914fec27
+"zod@npm:^4.6.6":
+  version: 4.6.6
+  resolution: "zod@npm:4.6.6"
+  checksum: 10/ce628fb33400b531f48b63ad1bd9b5ab95ec3ac60d4e8025892d90af9ca5d03b168aaaf74071928345ad1b1bcd735a7d5cf33230ece7de885240bb0f2b7bb492
   languageName: node
   linkType: hard
 
