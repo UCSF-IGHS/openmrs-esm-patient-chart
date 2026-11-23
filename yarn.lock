@@ -4714,7 +4714,7 @@ __metadata:
     eslint-plugin-react-hooks: "npm:^4.6.0"
     eslint-plugin-testing-library: "npm:^6.2.2"
     husky: "npm:^8.0.3"
-    i18next: "npm:^21.10.0"
+    i18next: "npm:^26.3.4"
     i18next-parser: "npm:^6.6.0"
     identity-obj-proxy: "npm:^3.0.0"
     jest: "npm:^29.7.0"
@@ -15832,6 +15832,18 @@ __metadata:
   dependencies:
     "@babel/runtime": "npm:^7.17.2"
   checksum: 10/f0d2ab888627c24b00068461eeedad33437970396539b663a4916e7ba279f6bb91e34221ee9c3608079b9d320a0cb02e9f51458f5c47c809c45676900db94abf
+  languageName: node
+  linkType: hard
+
+"i18next@npm:^26.3.4":
+  version: 26.3.4
+  resolution: "i18next@npm:26.3.4"
+  peerDependencies:
+    typescript: ^5 || ^6
+  peerDependenciesMeta:
+    typescript:
+      optional: true
+  checksum: 10/133ba9a5f76c1d57337f0dcc1b0ab0ff987714a1863813dcc95024531074c6d92603a19b0bac9c16a6b04c734742d8d098da0c222bef5a9562bdde231ea4b221
   languageName: node
   linkType: hard
 
